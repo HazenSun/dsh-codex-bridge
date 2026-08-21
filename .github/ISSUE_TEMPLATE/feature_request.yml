@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose a focused addition to the Bridge contract or workflow.
+title: '[Feature]: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem before proposing an API.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Include safety, compatibility and recovery implications.
+    validations:
+      required: true

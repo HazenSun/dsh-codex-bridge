@@ -1,0 +1,45 @@
+# DSH Codex Bridge runs as a headless, stdout-clean MCP host over dsh-base.
+
+- id: hmr
+  disabled: true
+
+- id: system-prompt
+  config:
+    persona: >-
+      You are an implementation agent powered by {{model}}. Your working directory is {{cwd}}.
+      Work only inside that workspace and finish with concise, verifiable evidence.
+
+- id: sandbox-policy
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.cwd()
+
+# The bridge is non-interactive and always works in a disposable task worktree.
+- id: approval
+  config:
+    policy: never
+
+- id: permission
+  config:
+    defaultPreset: bridge-worktree
+    presets:
+      bridge-worktree:
+        sandbox: workspace-write
+        approval: never
+        name: Bridge worktree
+        description: Write only inside the isolated task worktree without interactive prompts.
+
+- id: session-telemetry-otel
+  disabled: true
+
+- insert:
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
+
+    - id: dsh-codex-bridge
+      name: '@dsh-codex-bridge/dsh-plugin'

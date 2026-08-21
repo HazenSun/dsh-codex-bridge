@@ -1,0 +1,47 @@
+{
+  "name": "@dsh-codex-bridge/protocol",
+  "version": "0.1.0-alpha.1",
+  "description": "Host-neutral v1alpha1 protocol for DSH Codex Bridge",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HazenSun/dsh-codex-bridge.git",
+    "directory": "packages/protocol"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate:schemas": "npm run build && node scripts/generate-json-schema.mjs"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

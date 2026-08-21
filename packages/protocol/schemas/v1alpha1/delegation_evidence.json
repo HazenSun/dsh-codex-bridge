@@ -1,0 +1,80 @@
+{
+  "$ref": "#/definitions/delegation_evidence",
+  "definitions": {
+    "delegation_evidence": {
+      "type": "object",
+      "properties": {
+        "children_requested": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "children_completed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "children_failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128,
+          "default": 0
+        },
+        "child_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "maxItems": 128,
+          "default": []
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/delegation_evidence/properties/child_task_ids/items"
+          },
+          "maxItems": 32,
+          "default": []
+        },
+        "observed": {
+          "type": "object",
+          "properties": {
+            "subagent_calls": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            },
+            "tool_names": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "maxItems": 256
+            }
+          },
+          "required": ["subagent_calls", "tool_names"],
+          "additionalProperties": false
+        },
+        "source": {
+          "type": "string",
+          "enum": ["codex", "bridge", "dsh"]
+        },
+        "summary": {
+          "$ref": "#/definitions/delegation_evidence/properties/observed/properties/tool_names/items"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["children_requested", "children_completed", "source", "recorded_at"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

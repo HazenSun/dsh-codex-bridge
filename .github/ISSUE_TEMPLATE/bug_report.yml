@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible Bridge failure without sharing secrets.
+title: '[Bug]: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Run `dsh-bridge doctor --json --redacted` first. Never paste credentials or private source.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include bounded steps and sanitized configuration.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Bridge, DSH, Codex, Node and operating system.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [Direct Mode, Native Shell Mode]
+    validations:
+      required: true

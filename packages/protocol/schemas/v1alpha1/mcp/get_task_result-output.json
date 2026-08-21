@@ -1,0 +1,520 @@
+{
+  "$ref": "#/definitions/get_task_resultOutput",
+  "definitions": {
+    "get_task_resultOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "protocol_version": {
+              "$ref": "#/definitions/get_task_resultOutput/properties/protocol_version"
+            },
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "run_id": {
+              "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+            },
+            "trace_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["completed", "partial", "cancelled", "timed_out", "interrupted", "failed"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000
+            },
+            "acceptance": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "criterion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "passed": {
+                    "type": "boolean"
+                  },
+                  "evidence": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                  }
+                },
+                "required": ["criterion", "passed"],
+                "additionalProperties": false
+              },
+              "maxItems": 128
+            },
+            "changed_files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "added",
+                      "modified",
+                      "deleted",
+                      "renamed",
+                      "copied",
+                      "type_changed",
+                      "untracked"
+                    ]
+                  },
+                  "additions": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "deletions": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "binary": {
+                    "type": "boolean"
+                  },
+                  "previous_path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": ["path", "status", "additions", "deletions", "binary"],
+                "additionalProperties": false
+              },
+              "maxItems": 100000
+            },
+            "diff_stat": {
+              "type": "object",
+              "properties": {
+                "files_changed": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "insertions": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "deletions": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "binary_files": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                }
+              },
+              "required": ["files_changed", "insertions", "deletions", "binary_files"],
+              "additionalProperties": false
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["passed", "failed", "skipped", "not_run"]
+                  },
+                  "command": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                  },
+                  "duration_ms": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "total": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "passed": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "failed": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "skipped": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                  },
+                  "report_artifact_id": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+                  }
+                },
+                "required": ["name", "status"],
+                "additionalProperties": false
+              },
+              "maxItems": 256
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+              },
+              "maxItems": 256
+            },
+            "artifacts": {
+              "type": "object",
+              "properties": {
+                "artifacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "artifact_id": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+                      },
+                      "task_id": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "patch",
+                          "diff_stat",
+                          "changed_files",
+                          "test_report",
+                          "command_log",
+                          "agent_log",
+                          "summary",
+                          "other"
+                        ]
+                      },
+                      "name": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                      },
+                      "media_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*\\/[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*(?:;.*)?$"
+                      },
+                      "encoding": {
+                        "type": "string",
+                        "enum": ["utf8", "base64"]
+                      },
+                      "bytes": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "uri": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "artifact_id",
+                      "task_id",
+                      "kind",
+                      "name",
+                      "media_type",
+                      "encoding",
+                      "bytes",
+                      "sha256",
+                      "uri",
+                      "created_at"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 1024
+                },
+                "total_bytes": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                }
+              },
+              "required": ["artifacts", "total_bytes"],
+              "additionalProperties": false
+            },
+            "delegation_decision": {
+              "type": "object",
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "enum": ["auto", "single", "multi"]
+                },
+                "resolved_strategy": {
+                  "type": "string",
+                  "enum": ["single", "multi"]
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100000
+                },
+                "roles": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+                  },
+                  "maxItems": 32
+                },
+                "decided_by": {
+                  "type": "string",
+                  "enum": ["codex", "bridge", "dsh"]
+                },
+                "decided_at": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/artifacts/properties/artifacts/items/properties/created_at"
+                }
+              },
+              "required": [
+                "strategy",
+                "resolved_strategy",
+                "reason",
+                "roles",
+                "decided_by",
+                "decided_at"
+              ],
+              "additionalProperties": false
+            },
+            "delegation_evidence": {
+              "type": "object",
+              "properties": {
+                "children_requested": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "children_completed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "children_failed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128,
+                  "default": 0
+                },
+                "child_task_ids": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/task_id"
+                  },
+                  "maxItems": 128,
+                  "default": []
+                },
+                "roles": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/delegation_decision/properties/roles",
+                  "default": []
+                },
+                "observed": {
+                  "type": "object",
+                  "properties": {
+                    "subagent_calls": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "tool_names": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                      },
+                      "maxItems": 256
+                    }
+                  },
+                  "required": ["subagent_calls", "tool_names"],
+                  "additionalProperties": false
+                },
+                "source": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/delegation_decision/properties/decided_by"
+                },
+                "summary": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                },
+                "recorded_at": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/artifacts/properties/artifacts/items/properties/created_at"
+                }
+              },
+              "required": ["children_requested", "children_completed", "source", "recorded_at"],
+              "additionalProperties": false
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "input_tokens": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "output_tokens": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "total_tokens": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                },
+                "cost_usd": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "providers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                      },
+                      "model": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
+                      },
+                      "input_tokens": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                      },
+                      "output_tokens": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                      },
+                      "total_tokens": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
+                      },
+                      "cost_usd": {
+                        "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/usage/properties/cost_usd"
+                      }
+                    },
+                    "required": ["provider", "model"],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 128
+                }
+              },
+              "required": ["providers"],
+              "additionalProperties": false
+            },
+            "started_at": {
+              "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/artifacts/properties/artifacts/items/properties/created_at"
+            },
+            "completed_at": {
+              "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/artifacts/properties/artifacts/items/properties/created_at"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "protocol_version": {
+                  "$ref": "#/definitions/get_task_resultOutput/properties/protocol_version"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "INVALID_REQUEST",
+                    "UNSUPPORTED_PROTOCOL_VERSION",
+                    "PROFILE_NOT_FOUND",
+                    "PROFILE_INVALID",
+                    "PROJECT_NOT_FOUND",
+                    "WORKSPACE_NOT_ALLOWED",
+                    "WORKSPACE_NOT_FOUND",
+                    "WORKSPACE_BUSY",
+                    "TASK_NOT_FOUND",
+                    "TASK_INVALID_TRANSITION",
+                    "TASK_ALREADY_TERMINAL",
+                    "TASK_ALREADY_RUNNING",
+                    "TASK_CANCELLED",
+                    "TASK_TIMED_OUT",
+                    "TASK_INTERRUPTED",
+                    "ARTIFACT_NOT_FOUND",
+                    "ARTIFACT_RANGE_INVALID",
+                    "ARTIFACT_HASH_MISMATCH",
+                    "ARTIFACT_TOO_LARGE",
+                    "MODEL_NOT_FOUND",
+                    "REASONING_UNSUPPORTED",
+                    "RATE_LIMITED",
+                    "BACKEND_UNAVAILABLE",
+                    "BACKEND_ERROR",
+                    "PERMISSION_DENIED",
+                    "RECURSION_LIMIT",
+                    "RESOURCE_LIMIT",
+                    "INTERNAL_ERROR"
+                  ]
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "retryable": {
+                  "type": "boolean"
+                },
+                "details": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/error/properties/details/additionalProperties"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/error/properties/details/additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": ["protocol_version", "code", "message", "retryable"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol_version",
+            "task_id",
+            "run_id",
+            "trace_id",
+            "status",
+            "summary",
+            "acceptance",
+            "changed_files",
+            "diff_stat",
+            "tests",
+            "warnings",
+            "artifacts",
+            "completed_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": ["protocol_version", "result"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

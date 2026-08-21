@@ -1,0 +1,20 @@
+{
+  "$ref": "#/definitions/list_profilesInput",
+  "definitions": {
+    "list_profilesInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "include_capabilities": {
+          "type": "boolean"
+        }
+      },
+      "required": ["protocol_version"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

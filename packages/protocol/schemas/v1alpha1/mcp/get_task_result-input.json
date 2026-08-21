@@ -1,0 +1,23 @@
+{
+  "$ref": "#/definitions/get_task_resultInput",
+  "definitions": {
+    "get_task_resultInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        }
+      },
+      "required": ["protocol_version", "task_id"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

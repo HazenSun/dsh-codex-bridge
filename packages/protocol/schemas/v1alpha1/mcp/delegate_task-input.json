@@ -1,0 +1,131 @@
+{
+  "$ref": "#/definitions/delegate_taskInput",
+  "definitions": {
+    "delegate_taskInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "delegation_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "profile_id": {
+          "$ref": "#/definitions/delegate_taskInput/properties/project_id"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/delegate_taskInput/properties/objective"
+          },
+          "maxItems": 128,
+          "default": []
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["isolated_worktree", "patch_only"]
+            },
+            "base_ref": {
+              "$ref": "#/definitions/delegate_taskInput/properties/project_id"
+            }
+          },
+          "additionalProperties": false
+        },
+        "delegation": {
+          "type": "object",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["auto", "single", "multi"],
+              "default": "auto"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/delegate_taskInput/properties/project_id"
+              },
+              "maxItems": 32,
+              "default": []
+            }
+          },
+          "additionalProperties": false
+        },
+        "idempotency_key": {
+          "$ref": "#/definitions/delegate_taskInput/properties/project_id"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/delegate_taskInput/properties/metadata/additionalProperties"
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/definitions/delegate_taskInput/properties/metadata/additionalProperties"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": ["protocol_version", "project_id", "profile_id", "objective"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

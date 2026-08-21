@@ -1,0 +1,36 @@
+{
+  "name": "@dsh-codex-bridge/workspace",
+  "version": "0.1.0-alpha.1",
+  "description": "Safe Git worktree isolation and artifact collection for DSH Codex Bridge.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HazenSun/dsh-codex-bridge.git",
+    "directory": "packages/workspace"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

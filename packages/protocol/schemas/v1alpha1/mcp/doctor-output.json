@@ -1,0 +1,55 @@
+{
+  "$ref": "#/definitions/doctorOutput",
+  "definitions": {
+    "doctorOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["healthy", "degraded", "unavailable"]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["ok", "degraded", "failed", "skipped"]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "latency_ms": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["name", "status"],
+            "additionalProperties": false
+          },
+          "maxItems": 64
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["protocol_version", "status", "checks", "generated_at"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

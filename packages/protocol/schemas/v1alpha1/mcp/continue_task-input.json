@@ -1,0 +1,41 @@
+{
+  "$ref": "#/definitions/continue_taskInput",
+  "definitions": {
+    "continue_taskInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/continue_taskInput/properties/feedback"
+          },
+          "maxItems": 128
+        },
+        "expected_run_id": {
+          "$ref": "#/definitions/continue_taskInput/properties/task_id"
+        },
+        "idempotency_key": {
+          "$ref": "#/definitions/continue_taskInput/properties/task_id"
+        }
+      },
+      "required": ["protocol_version", "task_id", "feedback"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

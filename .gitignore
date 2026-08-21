@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+.bridge/
+.dsh-codex-bridge/
+/bridge.yaml
+plugins/dsh-codex-bridge/runtime/

@@ -1,0 +1,350 @@
+{
+  "$ref": "#/definitions/wait_taskOutput",
+  "definitions": {
+    "wait_taskOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "task": {
+          "type": "object",
+          "properties": {
+            "protocol_version": {
+              "$ref": "#/definitions/wait_taskOutput/properties/protocol_version"
+            },
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "trace_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "origin": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "delegation_depth": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            "project_id": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+            },
+            "workspace_id": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+            },
+            "profile_id": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+            },
+            "objective": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000
+            },
+            "acceptance_criteria": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/wait_taskOutput/properties/task/properties/objective"
+              },
+              "maxItems": 128
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "validating",
+                "queued",
+                "preparing_workspace",
+                "running",
+                "waiting_input",
+                "collecting",
+                "cancelling",
+                "completed",
+                "partial",
+                "cancelled",
+                "timed_out",
+                "interrupted",
+                "failed"
+              ]
+            },
+            "run_id": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updated_at": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+            },
+            "started_at": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+            },
+            "finished_at": {
+              "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+            },
+            "progress": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "percent": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "updated_at": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+                }
+              },
+              "required": ["updated_at"],
+              "additionalProperties": false
+            },
+            "delegation": {
+              "type": "object",
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "enum": ["auto", "single", "multi"],
+                  "default": "auto"
+                },
+                "reason": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/progress/properties/message"
+                },
+                "roles": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+                  },
+                  "maxItems": 32,
+                  "default": []
+                }
+              },
+              "additionalProperties": false
+            },
+            "delegation_decision": {
+              "type": "object",
+              "properties": {
+                "strategy": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation/properties/strategy"
+                },
+                "resolved_strategy": {
+                  "type": "string",
+                  "enum": ["single", "multi"]
+                },
+                "reason": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/objective"
+                },
+                "roles": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation/properties/roles"
+                },
+                "decided_by": {
+                  "type": "string",
+                  "enum": ["codex", "bridge", "dsh"]
+                },
+                "decided_at": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+                }
+              },
+              "required": [
+                "strategy",
+                "resolved_strategy",
+                "reason",
+                "roles",
+                "decided_by",
+                "decided_at"
+              ],
+              "additionalProperties": false
+            },
+            "delegation_evidence": {
+              "type": "object",
+              "properties": {
+                "children_requested": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "children_completed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "children_failed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128,
+                  "default": 0
+                },
+                "child_task_ids": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
+                  },
+                  "maxItems": 128,
+                  "default": []
+                },
+                "roles": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation/properties/roles",
+                  "default": []
+                },
+                "observed": {
+                  "type": "object",
+                  "properties": {
+                    "subagent_calls": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "tool_names": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/wait_taskOutput/properties/task/properties/progress/properties/message"
+                      },
+                      "maxItems": 256
+                    }
+                  },
+                  "required": ["subagent_calls", "tool_names"],
+                  "additionalProperties": false
+                },
+                "source": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation_decision/properties/decided_by"
+                },
+                "summary": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/progress/properties/message"
+                },
+                "recorded_at": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
+                }
+              },
+              "required": ["children_requested", "children_completed", "source", "recorded_at"],
+              "additionalProperties": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "protocol_version": {
+                  "$ref": "#/definitions/wait_taskOutput/properties/protocol_version"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "INVALID_REQUEST",
+                    "UNSUPPORTED_PROTOCOL_VERSION",
+                    "PROFILE_NOT_FOUND",
+                    "PROFILE_INVALID",
+                    "PROJECT_NOT_FOUND",
+                    "WORKSPACE_NOT_ALLOWED",
+                    "WORKSPACE_NOT_FOUND",
+                    "WORKSPACE_BUSY",
+                    "TASK_NOT_FOUND",
+                    "TASK_INVALID_TRANSITION",
+                    "TASK_ALREADY_TERMINAL",
+                    "TASK_ALREADY_RUNNING",
+                    "TASK_CANCELLED",
+                    "TASK_TIMED_OUT",
+                    "TASK_INTERRUPTED",
+                    "ARTIFACT_NOT_FOUND",
+                    "ARTIFACT_RANGE_INVALID",
+                    "ARTIFACT_HASH_MISMATCH",
+                    "ARTIFACT_TOO_LARGE",
+                    "MODEL_NOT_FOUND",
+                    "REASONING_UNSUPPORTED",
+                    "RATE_LIMITED",
+                    "BACKEND_UNAVAILABLE",
+                    "BACKEND_ERROR",
+                    "PERMISSION_DENIED",
+                    "RECURSION_LIMIT",
+                    "RESOURCE_LIMIT",
+                    "INTERNAL_ERROR"
+                  ]
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "retryable": {
+                  "type": "boolean"
+                },
+                "details": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/wait_taskOutput/properties/task/properties/error/properties/details/additionalProperties"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/definitions/wait_taskOutput/properties/task/properties/error/properties/details/additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": ["protocol_version", "code", "message", "retryable"],
+              "additionalProperties": false
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/wait_taskOutput/properties/task/properties/error/properties/details/additionalProperties"
+              }
+            }
+          },
+          "required": [
+            "protocol_version",
+            "task_id",
+            "trace_id",
+            "origin",
+            "delegation_depth",
+            "project_id",
+            "workspace_id",
+            "profile_id",
+            "objective",
+            "acceptance_criteria",
+            "status",
+            "created_at",
+            "updated_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": ["protocol_version", "task"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

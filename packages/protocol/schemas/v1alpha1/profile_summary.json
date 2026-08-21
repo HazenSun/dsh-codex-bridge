@@ -1,0 +1,109 @@
+{
+  "$ref": "#/definitions/profile_summary",
+  "definitions": {
+    "profile_summary": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "supports_followup": {
+              "type": "boolean"
+            },
+            "supports_cancel": {
+              "type": "boolean"
+            },
+            "supports_subagents": {
+              "type": "boolean"
+            },
+            "supported_workspace_modes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["isolated_worktree", "patch_only"]
+              },
+              "minItems": 1,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "supports_followup",
+            "supports_cancel",
+            "supports_subagents",
+            "supported_workspace_modes"
+          ],
+          "additionalProperties": false
+        },
+        "delegation": {
+          "type": "object",
+          "properties": {
+            "max_depth": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            "max_children": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            },
+            "roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/profile_summary/properties/profile_id"
+              },
+              "maxItems": 32
+            }
+          },
+          "required": ["max_depth", "max_children", "roles"],
+          "additionalProperties": false
+        },
+        "max_tokens": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 86400
+        },
+        "workspace_modes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/profile_summary/properties/capabilities/properties/supported_workspace_modes/items"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "protocol_version",
+        "profile_id",
+        "description",
+        "capabilities",
+        "delegation",
+        "max_tokens",
+        "timeout_seconds",
+        "workspace_modes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

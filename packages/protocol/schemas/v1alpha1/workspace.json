@@ -1,0 +1,62 @@
+{
+  "$ref": "#/definitions/workspace",
+  "definitions": {
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "project_id": {
+          "$ref": "#/definitions/workspace/properties/workspace_id"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["isolated_worktree", "patch_only"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["preparing", "ready", "dirty", "released", "missing"]
+        },
+        "base_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/-]*$"
+        },
+        "head_revision": {
+          "$ref": "#/definitions/workspace/properties/base_revision"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "$ref": "#/definitions/workspace/properties/created_at"
+        },
+        "released_at": {
+          "$ref": "#/definitions/workspace/properties/created_at"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "workspace_id",
+        "project_id",
+        "mode",
+        "status",
+        "base_revision",
+        "created_at",
+        "updated_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

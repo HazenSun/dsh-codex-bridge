@@ -1,0 +1,44 @@
+{
+  "$ref": "#/definitions/delegation_decision",
+  "definitions": {
+    "delegation_decision": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["auto", "single", "multi"]
+        },
+        "resolved_strategy": {
+          "type": "string",
+          "enum": ["single", "multi"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "maxItems": 32
+        },
+        "decided_by": {
+          "type": "string",
+          "enum": ["codex", "bridge", "dsh"]
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["strategy", "resolved_strategy", "reason", "roles", "decided_by", "decided_at"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

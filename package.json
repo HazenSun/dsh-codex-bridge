@@ -1,0 +1,63 @@
+{
+  "name": "dsh-codex-bridge",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "A local-first bridge that lets Codex delegate implementation work to DeepSeek Harness agents.",
+  "homepage": "https://github.com/HazenSun/dsh-codex-bridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HazenSun/dsh-codex-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HazenSun/dsh-codex-bridge/issues"
+  },
+  "keywords": [
+    "codex",
+    "deepseek",
+    "dsh",
+    "mcp",
+    "agents",
+    "subagents"
+  ],
+  "author": "DSH Codex Bridge contributors",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "clean": "pnpm -r --if-present clean",
+    "dev": "pnpm --filter @dsh-codex-bridge/mcp-server dev",
+    "docs:check": "node scripts/check-doc-links.mjs",
+    "bridge": "node packages/cli/dist/index.js",
+    "dsh-bridge": "node packages/cli/dist/index.js",
+    "install:local": "pnpm build && node packages/cli/dist/index.js install --source .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "release:check": "node scripts/check-release-consistency.mjs",
+    "release:publish": "changeset publish",
+    "release:version": "changeset version",
+    "test": "vitest run",
+    "test:e2e:dsh": "node scripts/real-dsh-e2e.mjs",
+    "test:e2e:model-matrix": "node scripts/model-matrix-e2e.mjs",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "validate:plugin": "node scripts/validate-codex-plugin.mjs",
+    "verify": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "@eslint/js": "^9.34.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^24.3.0",
+    "eslint": "^9.34.0",
+    "prettier": "^3.6.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0",
+    "vitest": "^3.2.4"
+  }
+}

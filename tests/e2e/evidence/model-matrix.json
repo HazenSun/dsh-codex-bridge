@@ -1,0 +1,183 @@
+{
+  "schema": "dsh-codex-bridge/model-matrix-evidence/v2",
+  "started_at": "2026-08-21T01:33:36.319Z",
+  "completed_at": "2026-08-21T01:34:26.396Z",
+  "requested_models": {
+    "kimi": {
+      "provider": "moonshotai-cn",
+      "model": "kimi-k2.7-code",
+      "reasoning_effort": "high"
+    },
+    "deepseek": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash",
+      "reasoning_effort": "high"
+    }
+  },
+  "kimi_high_attempt": {
+    "task_id": "task_529d29b0-f0f7-4b51-9f24-1078b54d9cb2",
+    "status": "completed",
+    "run_id": "run_d6b63ded-c452-4207-b460-6b3d88f42b5e",
+    "session_id": "bridge-b23687e7-68f9-4ebb-a9a3-cb050ae616e9",
+    "started_at": "2026-08-21T01:33:36.384Z",
+    "finished_at": "2026-08-21T01:33:52.783Z",
+    "summary": "Created `kimi.txt` in the workspace containing exactly `KIMI_2_7_CODE_HIGH_OK` followed by one newline. Verification: read-back confirmed the single-line content.",
+    "delegation_decision": {
+      "strategy": "single",
+      "resolved_strategy": "single",
+      "reason": "One local file write has no independent workstreams.",
+      "roles": [],
+      "decided_by": "codex",
+      "decided_at": "2026-08-21T01:33:36.323Z"
+    },
+    "delegation_evidence": {
+      "children_requested": 0,
+      "children_completed": 0,
+      "children_failed": 0,
+      "child_task_ids": [],
+      "roles": [],
+      "observed": {
+        "subagent_calls": 0,
+        "tool_names": []
+      },
+      "source": "dsh",
+      "summary": "0 child call(s), 0 completed, 0 failed.",
+      "recorded_at": "2026-08-21T01:33:52.783Z"
+    },
+    "patch_sha256": "4e560c6cc7156bc8252bc02c1fb7444dc9f7e1b197b03e5f9ddb9ad0c598f974"
+  },
+  "kimi_fallback_used": false,
+  "kimi_effective": {
+    "task_id": "task_529d29b0-f0f7-4b51-9f24-1078b54d9cb2",
+    "status": "completed",
+    "run_id": "run_d6b63ded-c452-4207-b460-6b3d88f42b5e",
+    "session_id": "bridge-b23687e7-68f9-4ebb-a9a3-cb050ae616e9",
+    "started_at": "2026-08-21T01:33:36.384Z",
+    "finished_at": "2026-08-21T01:33:52.783Z",
+    "summary": "Created `kimi.txt` in the workspace containing exactly `KIMI_2_7_CODE_HIGH_OK` followed by one newline. Verification: read-back confirmed the single-line content.",
+    "delegation_decision": {
+      "strategy": "single",
+      "resolved_strategy": "single",
+      "reason": "One local file write has no independent workstreams.",
+      "roles": [],
+      "decided_by": "codex",
+      "decided_at": "2026-08-21T01:33:36.323Z"
+    },
+    "delegation_evidence": {
+      "children_requested": 0,
+      "children_completed": 0,
+      "children_failed": 0,
+      "child_task_ids": [],
+      "roles": [],
+      "observed": {
+        "subagent_calls": 0,
+        "tool_names": []
+      },
+      "source": "dsh",
+      "summary": "0 child call(s), 0 completed, 0 failed.",
+      "recorded_at": "2026-08-21T01:33:52.783Z"
+    },
+    "patch_sha256": "4e560c6cc7156bc8252bc02c1fb7444dc9f7e1b197b03e5f9ddb9ad0c598f974",
+    "route": {
+      "provider": "moonshotai-cn",
+      "model": "kimi-k2.7-code",
+      "maxTokens": 12000,
+      "reasoningEffort": "high"
+    }
+  },
+  "deepseek": {
+    "task_id": "task_79e87a85-3bd3-472f-9277-02d718cefedf",
+    "status": "completed",
+    "run_id": "run_e6a4f8ac-9217-4558-bf74-ce8a0098b353",
+    "session_id": "bridge-0030457b-ace6-4156-af1b-5c560a0de694",
+    "started_at": "2026-08-21T01:33:36.389Z",
+    "finished_at": "2026-08-21T01:33:43.456Z",
+    "summary": "Done.\n\n**Changes:** Created `deepseek.txt` in the workspace containing exactly `DEEPSEEK_V4_FLASH_HIGH_OK` followed by one newline.\n\n**Verification evidence:**\n- `read deepseek.txt` shows exactly 1 line: `DEEPSEEK_V4_FLASH_HIGH_OK`\n- `od -c deepseek.txt` shows bytes `D E E P S E E K _ V 4 _ F L A S H _ H I G H _ O K \\n` — exactly the requested string plus a single trailing newline, no extra content\n- `wc -c deepseek.txt` reports 26 bytes = 25 characters + 1 newline\n\nAcceptance criterion met: the file has the exact requested single line.",
+    "delegation_decision": {
+      "strategy": "single",
+      "resolved_strategy": "single",
+      "reason": "One local file write has no independent workstreams.",
+      "roles": [],
+      "decided_by": "codex",
+      "decided_at": "2026-08-21T01:33:36.323Z"
+    },
+    "delegation_evidence": {
+      "children_requested": 0,
+      "children_completed": 0,
+      "children_failed": 0,
+      "child_task_ids": [],
+      "roles": [],
+      "observed": {
+        "subagent_calls": 0,
+        "tool_names": []
+      },
+      "source": "dsh",
+      "summary": "0 child call(s), 0 completed, 0 failed.",
+      "recorded_at": "2026-08-21T01:33:43.455Z"
+    },
+    "patch_sha256": "5264e78356272c44397866ef6a3fe626d821eb253d67615816c3162d8a1e98e8",
+    "route": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash",
+      "maxTokens": 12000,
+      "reasoningEffort": "high"
+    }
+  },
+  "multi_agent": {
+    "task_id": "task_84ce6ae8-4974-4494-9b10-cb9bc9f3ae78",
+    "status": "completed",
+    "run_id": "run_90c6a850-c3de-4395-84d3-415c4585ac40",
+    "session_id": "bridge-6d0223ef-4741-4783-8916-c7e6dff1c7f0",
+    "started_at": "2026-08-21T01:33:52.843Z",
+    "finished_at": "2026-08-21T01:34:16.621Z",
+    "summary": "Verification complete. Both acceptance criteria are met.\n\n## Summary\n\n**Changes made:**\n- Created `multi-agent.txt` in the workspace containing exactly `ALPHA+BETA` followed by one newline.\n\n**Process:**\n1. Called the subagent tool exactly twice, in parallel:\n   - **alpha child** → returned exactly `ALPHA+`\n   - **beta child** → returned exactly `BETA`\n2. Concatenated their outputs verbatim in order (`ALPHA+` + `BETA`) and wrote the result to `multi-agent.txt` with one trailing newline.\n\n**Verification evidence:**\n- `od -c multi-agent.txt` shows byte-for-byte: `A L P H A + B E T A \\n` (no extra characters, no trailing spaces)\n- `wc -c` reports exactly **11 bytes** (10 characters + 1 newline)\n- `read` confirms the single line `ALPHA+BETA`",
+    "delegation_decision": {
+      "strategy": "auto",
+      "resolved_strategy": "multi",
+      "reason": "The ALPHA and BETA assignments are independent and can be delegated separately.",
+      "roles": ["alpha", "beta"],
+      "decided_by": "bridge",
+      "decided_at": "2026-08-21T01:33:52.789Z"
+    },
+    "delegation_evidence": {
+      "children_requested": 2,
+      "children_completed": 2,
+      "children_failed": 0,
+      "child_task_ids": [],
+      "roles": ["alpha", "beta"],
+      "observed": {
+        "subagent_calls": 2,
+        "tool_names": ["subagent", "subagent"]
+      },
+      "source": "dsh",
+      "summary": "2 child call(s), 2 completed, 0 failed.",
+      "recorded_at": "2026-08-21T01:34:16.621Z"
+    },
+    "patch_sha256": "c7e11503d88c89bd9d3cb0434c9453f518aaf5b745cac208f27f85e562fb1cfa",
+    "route": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash",
+      "maxTokens": 12000,
+      "reasoningEffort": "high"
+    },
+    "subagent_calls": 2
+  },
+  "continuation": {
+    "task_id": "task_79e87a85-3bd3-472f-9277-02d718cefedf",
+    "first_run_id": "run_e6a4f8ac-9217-4558-bf74-ce8a0098b353",
+    "second_run_id": "run_2d18c1d7-661c-449d-862e-4daa8e6bca89",
+    "first_session_id": "bridge-0030457b-ace6-4156-af1b-5c560a0de694",
+    "second_session_id": "bridge-0030457b-ace6-4156-af1b-5c560a0de694",
+    "result_history_count": 1,
+    "patch_sha256": "942175bbbaeca7f1d054d3d823ca4dd8da1b14a1b0ff4b355016e2f02857ca81"
+  },
+  "checks": {
+    "kimi_model_completed": true,
+    "deepseek_high_completed": true,
+    "different_models_routed": true,
+    "concurrent_agent_windows_overlap": true,
+    "internal_multi_agent_completed": true,
+    "continuous_same_session": true,
+    "main_worktree_unchanged": true
+  }
+}

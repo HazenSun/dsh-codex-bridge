@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": false,
+  "commit": false,
+  "fixed": [
+    [
+      "@dsh-codex-bridge/artifacts",
+      "@dsh-codex-bridge/cli",
+      "@dsh-codex-bridge/config",
+      "@dsh-codex-bridge/dsh-plugin",
+      "@dsh-codex-bridge/dsh-runtime",
+      "@dsh-codex-bridge/mcp-server",
+      "@dsh-codex-bridge/protocol",
+      "@dsh-codex-bridge/task-engine",
+      "@dsh-codex-bridge/workspace"
+    ]
+  ],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

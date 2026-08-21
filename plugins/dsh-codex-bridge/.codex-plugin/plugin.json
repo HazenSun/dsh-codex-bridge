@@ -1,0 +1,32 @@
+{
+  "name": "dsh-codex-bridge",
+  "version": "0.1.0-alpha.1",
+  "description": "Delegate isolated implementation tasks from Codex to DeepSeek Harness agents.",
+  "author": {
+    "name": "DSH Codex Bridge Contributors"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["codex", "deepseek", "dsh", "mcp", "sub-agent"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DSH \u00d7 Codex Bridge",
+    "shortDescription": "Delegate coding work to isolated DSH agents.",
+    "longDescription": "Codex plans and reviews while DeepSeek Harness executes with profile-based model routing, isolated Git worktrees, cancellable tasks and content-addressed evidence.",
+    "developerName": "DSH Codex Bridge Contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "MCP tools",
+      "Code execution",
+      "Automatic single/multi-agent routing",
+      "Multi-model delegation",
+      "Git worktree isolation"
+    ],
+    "brandColor": "#635BFF",
+    "defaultPrompt": [
+      "Use DSH for this task and choose single or multi Agent automatically.",
+      "Show my DSH execution profiles and their limits.",
+      "Review the result of my latest delegated task."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

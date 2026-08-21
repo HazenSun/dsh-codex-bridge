@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dsh-codex-bridge": {
+      "command": "dsh",
+      "args": ["--profile", "codex-bridge"],
+      "env": {
+        "DSH_TELEMETRY_DISABLED": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "dsh-codex-bridge/e2e-evidence/v1",
+  "bridge_version": "0.1.0-alpha.1",
+  "dsh_version": "0.1.0-rc.8",
+  "started_at": "2026-08-21T01:34:38.800Z",
+  "completed_at": "2026-08-21T01:35:00.112Z",
+  "task_id": "task_3c7b5c85-7b2e-4663-889a-328d279966b1",
+  "task_status": "completed",
+  "tools": [
+    "cancel_task",
+    "continue_task",
+    "delegate_task",
+    "get_task",
+    "get_task_result",
+    "list_profiles",
+    "read_task_artifact",
+    "wait_task"
+  ],
+  "profile_id": "deepseek-builder",
+  "model": "deepseek-v4-flash",
+  "session_id": "bridge-2eac10de-3907-4063-bfc1-4271c1ce14a2",
+  "run_id": "run_669084c9-43d0-4b18-ac10-2e7f9e0c6abb",
+  "continuation": {
+    "run_id": "run_3d7952b1-8c67-43f5-9d29-c1f9df4deaba",
+    "session_id": "bridge-2eac10de-3907-4063-bfc1-4271c1ce14a2",
+    "artifact": {
+      "artifact_id": "73a909e954731411db09aa30109bcb0aaceeee8116bac951a2934598f2deea21",
+      "task_id": "task_3c7b5c85-7b2e-4663-889a-328d279966b1",
+      "kind": "patch",
+      "name": "changes.patch",
+      "media_type": "text/x-diff",
+      "encoding": "utf8",
+      "bytes": 172,
+      "sha256": "73a909e954731411db09aa30109bcb0aaceeee8116bac951a2934598f2deea21",
+      "uri": "artifact://task_3c7b5c85-7b2e-4663-889a-328d279966b1/73a909e954731411db09aa30109bcb0aaceeee8116bac951a2934598f2deea21",
+      "created_at": "2026-08-21T01:34:59.981Z"
+    }
+  },
+  "cancellation": {
+    "task_id": "task_8304bd94-032b-47c8-9824-0b70e7d65583",
+    "receipt_status": "cancelling",
+    "final_status": "cancelled",
+    "error_code": "TASK_CANCELLED"
+  },
+  "result_summary": "All done. Summary:\n\n## Changes\nCreated a single new file, `bridge-proof.txt`, in the isolated worktree at the session workspace root. No other files were touched.\n\n## Verification evidence\n1. **File exists**: `ls -la bridge-proof.txt` → `-rw-r--r--` 20 bytes, present in the worktree.\n2. **Exact content**: `od -c bridge-proof.txt` shows exactly `D S H _ C O D E X _ B R I D G E _ O K \\n` — i.e. the literal string `DSH_CODEX_BRIDGE_OK` (16 chars) followed by one newline, totaling 20 bytes (no trailing extra characters).\n3. **Main working tree unchanged**: `git status --short` reports only `?? bridge-proof.txt` (untracked new file); `git diff --stat` is empty, confirming no tracked file was modified.",
+  "artifact": {
+    "artifact_id": "f795167a6b924b9cc7c6eae67e4abf37019632b1a3dab0e5c6ca588f1eeeca9c",
+    "task_id": "task_3c7b5c85-7b2e-4663-889a-328d279966b1",
+    "kind": "patch",
+    "name": "changes.patch",
+    "media_type": "text/x-diff",
+    "encoding": "utf8",
+    "bytes": 165,
+    "sha256": "f795167a6b924b9cc7c6eae67e4abf37019632b1a3dab0e5c6ca588f1eeeca9c",
+    "uri": "artifact://task_3c7b5c85-7b2e-4663-889a-328d279966b1/f795167a6b924b9cc7c6eae67e4abf37019632b1a3dab0e5c6ca588f1eeeca9c",
+    "created_at": "2026-08-21T01:34:50.874Z"
+  },
+  "checks": {
+    "mcp_tools_present": true,
+    "profile_routed": true,
+    "task_completed": true,
+    "patch_contains_proof": true,
+    "artifact_hash_verified": true,
+    "main_worktree_unchanged": true,
+    "session_persisted": true,
+    "run_id_consistent": true,
+    "dsh_subagent_preset_composed": true,
+    "real_cancel_converged": true,
+    "real_continue_same_session": true,
+    "real_continue_history_retained": true,
+    "continuation_patch_verified": true
+  }
+}

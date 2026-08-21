@@ -1,0 +1,33 @@
+{
+  "$ref": "#/definitions/cleanup_taskOutput",
+  "definitions": {
+    "cleanup_taskOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "cleaned": {
+          "type": "boolean"
+        },
+        "artifacts_retained": {
+          "type": "boolean"
+        },
+        "cleaned_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["protocol_version", "task_id", "cleaned", "artifacts_retained", "cleaned_at"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

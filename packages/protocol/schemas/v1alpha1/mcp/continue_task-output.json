@@ -1,0 +1,55 @@
+{
+  "$ref": "#/definitions/continue_taskOutput",
+  "definitions": {
+    "continue_taskOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": {
+          "type": "string",
+          "const": "bridge.dsh.dev/v1alpha1"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "project_id": {
+          "$ref": "#/definitions/continue_taskOutput/properties/task_id"
+        },
+        "workspace_id": {
+          "$ref": "#/definitions/continue_taskOutput/properties/task_id"
+        },
+        "profile_id": {
+          "$ref": "#/definitions/continue_taskOutput/properties/task_id"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["validating", "queued", "preparing_workspace", "running"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "task_id",
+        "trace_id",
+        "project_id",
+        "workspace_id",
+        "profile_id",
+        "status",
+        "created_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

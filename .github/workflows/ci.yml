@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.19.0, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+
+  real-dsh-contract:
+    name: DSH rc.8 profile contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npm install --global @deepseek-ai/dsh@0.1.0-rc.8
+      - run: test "$(dsh --version)" = "0.1.0-rc.8"
+      - run: pnpm build
+      - run: pnpm dsh-bridge install --source . --no-codex
+      - run: dsh --profile codex-bridge --dump-config | grep '@dsh-codex-bridge/dsh-plugin'
+
+# The credentialed `pnpm test:e2e:dsh` run is intentionally not executed on
+# untrusted pull requests. Maintainers run it before a release and retain the
+# redacted evidence manifest under tests/e2e/evidence/.
