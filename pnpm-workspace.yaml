@@ -3,11 +3,8 @@ packages:
   - plugins/*
 
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
 
 catalog:
   '@modelcontextprotocol/sdk': ^1.30.0
   zod: ^3.25.76
-
-onlyBuiltDependencies:
-  - esbuild

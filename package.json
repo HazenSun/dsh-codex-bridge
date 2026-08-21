@@ -36,7 +36,7 @@
     "install:local": "pnpm build && node packages/cli/dist/index.js install --source .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint .",
+    "lint": "pnpm build && eslint .",
     "release:check": "node scripts/check-release-consistency.mjs",
     "release:publish": "changeset publish",
     "release:version": "changeset version",
@@ -46,7 +46,7 @@
     "test:watch": "vitest",
     "typecheck": "pnpm -r --if-present typecheck",
     "validate:plugin": "node scripts/validate-codex-plugin.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
