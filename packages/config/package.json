@@ -30,7 +30,7 @@
   "dependencies": {
     "@dsh-codex-bridge/protocol": "workspace:*",
     "yaml": "^2.8.1",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
