@@ -116,6 +116,9 @@ describe('ArtifactStore', () => {
       '{"token":"super-secret","nested":{"api_key":"key-value"}}',
       'password = plain-password',
       'Authorization: Bearer abc.def',
+      '  Cookie : session=private-cookie',
+      '',
+      'x-api-key: private-api-key',
     ].join('\n');
     const descriptor = await store.putText('task-001', 'logs/debug.log', input);
     const output = await store.readText('task-001', 'logs/debug.log');
@@ -125,7 +128,9 @@ describe('ArtifactStore', () => {
     expect(output).not.toContain('key-value');
     expect(output).not.toContain('plain-password');
     expect(output).not.toContain('abc.def');
-    expect(output.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(output).not.toContain('private-cookie');
+    expect(output).not.toContain('private-api-key');
+    expect(output.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(6);
   });
 
   it('keeps binary data byte-for-byte and does not redact it', async () => {

@@ -285,8 +285,10 @@ function redactText(text: string, fields: readonly string[]): { text: string; ch
 
   // Header-style credentials (notably `Authorization: Bearer ...`) are common
   // in logs and do not have a JSON-like trailing comma to anchor the pattern.
+  // Horizontal whitespace is explicit so it cannot overlap with the line-prefix
+  // branch and trigger polynomial backtracking on newline-heavy input.
   const headerPattern =
-    /(^|\r?\n)(\s*(?:authorization|cookie|x-api-key|x-auth-token)\s*:\s*)([^\r\n]*)/gim;
+    /(^|\r?\n)([^\S\r\n]*(?:authorization|cookie|x-api-key|x-auth-token)[^\S\r\n]*:[^\S\r\n]*)([^\r\n]*)/gim;
   result = result.replace(headerPattern, (_match, prefix: string, key: string) => {
     changed = true;
     return `${prefix}${key}[REDACTED]`;
