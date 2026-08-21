@@ -11,7 +11,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const evidenceDir = resolve(root, 'tests/e2e/evidence');
+const evidenceDir = resolve(
+  process.env.DSH_BRIDGE_EVIDENCE_DIR ?? resolve(root, 'tests/e2e/evidence'),
+);
 const fixture = await mkdtemp(join(tmpdir(), 'dsh-codex-bridge-e2e-'));
 const stderrLines = [];
 
@@ -101,7 +103,7 @@ async function main() {
   transport.stderr?.on('data', (chunk) => {
     stderrLines.push(...String(chunk).split('\n').filter(Boolean));
   });
-  const client = new Client({ name: 'dsh-bridge-real-e2e', version: '0.1.0-alpha.1' });
+  const client = new Client({ name: 'dsh-bridge-real-e2e', version: '0.1.0-alpha.2' });
   const startedAt = new Date().toISOString();
   let succeeded = false;
   try {
@@ -407,7 +409,7 @@ async function main() {
       `${JSON.stringify(
         {
           schema: 'dsh-codex-bridge/e2e-evidence/v1',
-          bridge_version: '0.1.0-alpha.1',
+          bridge_version: '0.1.0-alpha.2',
           dsh_version: '0.1.0-rc.8',
           started_at: startedAt,
           completed_at: new Date().toISOString(),
@@ -451,7 +453,7 @@ await main().catch(async (error) => {
   await mkdir(evidenceDir, { recursive: true });
   const failure = {
     schema: 'dsh-codex-bridge/e2e-evidence/v1',
-    bridge_version: '0.1.0-alpha.1',
+    bridge_version: '0.1.0-alpha.2',
     dsh_version: '0.1.0-rc.8',
     completed_at: new Date().toISOString(),
     fixture,

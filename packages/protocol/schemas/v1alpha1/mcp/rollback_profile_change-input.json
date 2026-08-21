@@ -1,0 +1,15 @@
+{
+  "$ref": "#/definitions/rollback_profile_changeInput",
+  "definitions": {
+    "rollback_profile_changeInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
+        "expected_revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "required": ["protocol_version", "expected_revision"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

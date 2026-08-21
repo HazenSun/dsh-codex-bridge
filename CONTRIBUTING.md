@@ -2,7 +2,7 @@
 
 感谢参与。这个项目的核心难点不是再包一层命令，而是把 Codex 的委派体验、DSH 的 Agent Runtime、MCP 协议、Worktree 隔离和可复核证据做成一个可以长期维护的开源系统。
 
-项目目前处于 `0.1.0-alpha.1` 源码可用阶段。提交代码前，请先确认改动属于当前里程碑，并阅读 [架构规划](docs/architecture.md)、[施工规划](docs/implementation-plan.md) 和 [安全模型](docs/security.md)。
+项目目前处于 `0.1.0-alpha.2` 源码可用阶段。提交代码前，请先确认改动属于当前里程碑，并阅读 [架构规划](docs/architecture.md)、[施工规划](docs/implementation-plan.md) 和 [安全模型](docs/security.md)。
 
 ## 1. 贡献范围
 

@@ -10,9 +10,7 @@
           "maxLength": 128,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
         },
-        "task_id": {
-          "$ref": "#/definitions/artifact_ref/properties/artifact_id"
-        },
+        "task_id": { "$ref": "#/definitions/artifact_ref/properties/artifact_id" },
         "kind": {
           "type": "string",
           "enum": [
@@ -26,38 +24,18 @@
             "other"
           ]
         },
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
         "media_type": {
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*\\/[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*(?:;.*)?$"
         },
-        "encoding": {
-          "type": "string",
-          "enum": ["utf8", "base64"]
-        },
-        "bytes": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "uri": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2048
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "encoding": { "type": "string", "enum": ["utf8", "base64"] },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "uri": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "created_at": { "type": "string", "format": "date-time" }
       },
       "required": [
         "artifact_id",

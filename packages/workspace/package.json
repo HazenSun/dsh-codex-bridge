@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/workspace",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Safe Git worktree isolation and artifact collection for DSH Codex Bridge.",
   "repository": {
     "type": "git",

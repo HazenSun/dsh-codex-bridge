@@ -2,11 +2,14 @@
 
 The Bridge uses public Codex plugin/MCP surfaces and a pinned DSH Cordis contract. “Supported” means the listed combination is exercised by build, contract or end-to-end evidence—not merely expected to work.
 
-| Bridge          | DSH          | Node.js   | Codex CLI                      | OS          | Status       | Evidence                                                          |
-| --------------- | ------------ | --------- | ------------------------------ | ----------- | ------------ | ----------------------------------------------------------------- |
-| `0.1.0-alpha.1` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Verified     | [Real DSH E2E](../tests/e2e/evidence/real-dsh-rc8.json)           |
-| `0.1.0-alpha.1` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Model matrix | [Kimi/DeepSeek evidence](../tests/e2e/evidence/model-matrix.json) |
-| `0.1.0-alpha.1` | `0.1.0-rc.8` | `22.19+`  | current plugin-capable release | Linux x64   | CI contract  | Profile composition and full non-credentialed verification        |
+| Bridge          | DSH          | Node.js   | Codex CLI                      | OS          | Status       | Evidence                                                           |
+| --------------- | ------------ | --------- | ------------------------------ | ----------- | ------------ | ------------------------------------------------------------------ |
+| `0.1.0-alpha.2` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Setup E2E    | [Reproducible setup lifecycle](../scripts/setup-lifecycle-e2e.mjs) |
+| `0.1.0-alpha.2` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Model matrix | [Reproducible model matrix](../scripts/model-matrix-e2e.mjs)       |
+| `0.1.0-alpha.2` | `0.1.0-rc.8` | `22.19+`  | current plugin-capable release | Linux x64   | CI contract  | Setup/runtime schemas, Profile composition, and full verification  |
+| `0.1.0-alpha.1` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Verified     | [Real DSH E2E](../tests/e2e/evidence/real-dsh-rc8.json)            |
+| `0.1.0-alpha.1` | `0.1.0-rc.8` | `24.19.0` | `0.132.0`                      | macOS arm64 | Model matrix | [Kimi/DeepSeek evidence](../tests/e2e/evidence/model-matrix.json)  |
+| `0.1.0-alpha.1` | `0.1.0-rc.8` | `22.19+`  | current plugin-capable release | Linux x64   | CI contract  | Profile composition and full non-credentialed verification         |
 
 ## Compatibility policy
 
@@ -18,4 +21,4 @@ The Bridge uses public Codex plugin/MCP surfaces and a pinned DSH Cordis contrac
 
 ## Evidence scope
 
-The retained E2E fixtures prove tool discovery, profile routing, task completion, a DSH-authored patch, content hash verification, main-worktree isolation, same-session continuation, cancellation, Kimi/DeepSeek concurrent routing and two completed internal subagent calls. They do not certify every third-party provider or model; each project owner remains responsible for DSH provider configuration and cost controls.
+The retained Alpha 1 fixtures prove tool discovery, profile routing, task completion, a DSH-authored patch, content hash verification, main-worktree isolation, same-session continuation, cancellation, Kimi/DeepSeek concurrent routing and two completed internal subagent calls. Alpha 2 additionally passed the reproducible setup lifecycle and model-matrix scripts on 2026-08-21; local execution logs are intentionally not committed. These checks do not certify every third-party provider or model; each project owner remains responsible for DSH provider configuration and cost controls.

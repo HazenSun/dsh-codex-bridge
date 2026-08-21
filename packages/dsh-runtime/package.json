@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/dsh-runtime",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "In-process DeepSeek Harness runtime adapter for DSH Codex Bridge.",
   "repository": {
     "type": "git",

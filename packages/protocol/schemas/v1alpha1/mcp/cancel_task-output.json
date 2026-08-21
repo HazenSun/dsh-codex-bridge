@@ -4,10 +4,7 @@
     "cancel_taskOutput": {
       "type": "object",
       "properties": {
-        "protocol_version": {
-          "type": "string",
-          "const": "bridge.dsh.dev/v1alpha1"
-        },
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
         "task_id": {
           "type": "string",
           "minLength": 1,
@@ -38,10 +35,7 @@
             "failed"
           ]
         },
-        "accepted_at": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "accepted_at": { "type": "string", "format": "date-time" }
       },
       "required": ["protocol_version", "task_id", "trace_id", "status", "accepted_at"],
       "additionalProperties": false

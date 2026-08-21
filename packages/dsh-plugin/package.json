@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/dsh-plugin",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "DeepSeek Harness bundle that hosts the DSH Codex Bridge MCP gateway.",
   "repository": {
     "type": "git",
@@ -39,6 +39,7 @@
     "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
     "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
     "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
     "@dsh-codex-bridge/artifacts": "workspace:*",
     "@dsh-codex-bridge/config": "workspace:*",
     "@dsh-codex-bridge/dsh-runtime": "workspace:*",
@@ -56,7 +57,8 @@
     "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
     "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
     "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-session": "0.1.0-rc.8"
+    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8"
   },
   "publishConfig": {
     "access": "public"

@@ -9,4 +9,5 @@ coverage/
 .bridge/
 .dsh-codex-bridge/
 /bridge.yaml
+*.dsh-bridge.lock
 plugins/dsh-codex-bridge/runtime/

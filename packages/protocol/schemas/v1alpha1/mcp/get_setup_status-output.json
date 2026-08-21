@@ -1,0 +1,61 @@
+{
+  "$ref": "#/definitions/get_setup_statusOutput",
+  "definitions": {
+    "get_setup_statusOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
+        "state": {
+          "type": "string",
+          "enum": [
+            "needs_dsh",
+            "needs_dsh_profile",
+            "needs_project_config",
+            "needs_provider",
+            "needs_execution_profile",
+            "ready",
+            "degraded",
+            "upgrade_required"
+          ]
+        },
+        "config_path": { "type": "string", "minLength": 1, "maxLength": 100000 },
+        "config_revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "restart_required": { "type": "boolean" },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+              },
+              "status": { "type": "string", "enum": ["ok", "missing", "invalid", "skipped"] },
+              "message": { "$ref": "#/definitions/get_setup_statusOutput/properties/config_path" }
+            },
+            "required": ["name", "status"],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "next_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "protocol_version",
+        "state",
+        "config_path",
+        "restart_required",
+        "checks",
+        "next_actions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

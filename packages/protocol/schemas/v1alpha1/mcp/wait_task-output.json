@@ -4,10 +4,7 @@
     "wait_taskOutput": {
       "type": "object",
       "properties": {
-        "protocol_version": {
-          "type": "string",
-          "const": "bridge.dsh.dev/v1alpha1"
-        },
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
         "task": {
           "type": "object",
           "properties": {
@@ -32,11 +29,7 @@
               "maxLength": 64,
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
             },
-            "delegation_depth": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 32
-            },
+            "delegation_depth": { "type": "integer", "minimum": 0, "maximum": 32 },
             "project_id": {
               "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
             },
@@ -46,11 +39,7 @@
             "profile_id": {
               "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
             },
-            "objective": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100000
-            },
+            "objective": { "type": "string", "minLength": 1, "maxLength": 100000 },
             "acceptance_criteria": {
               "type": "array",
               "items": {
@@ -79,10 +68,7 @@
             "run_id": {
               "$ref": "#/definitions/wait_taskOutput/properties/task/properties/task_id"
             },
-            "created_at": {
-              "type": "string",
-              "format": "date-time"
-            },
+            "created_at": { "type": "string", "format": "date-time" },
             "updated_at": {
               "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
             },
@@ -95,16 +81,8 @@
             "progress": {
               "type": "object",
               "properties": {
-                "message": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 4096
-                },
-                "percent": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100
-                },
+                "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
                 "updated_at": {
                   "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
                 }
@@ -140,20 +118,14 @@
                 "strategy": {
                   "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation/properties/strategy"
                 },
-                "resolved_strategy": {
-                  "type": "string",
-                  "enum": ["single", "multi"]
-                },
+                "resolved_strategy": { "type": "string", "enum": ["single", "multi"] },
                 "reason": {
                   "$ref": "#/definitions/wait_taskOutput/properties/task/properties/objective"
                 },
                 "roles": {
                   "$ref": "#/definitions/wait_taskOutput/properties/task/properties/delegation/properties/roles"
                 },
-                "decided_by": {
-                  "type": "string",
-                  "enum": ["codex", "bridge", "dsh"]
-                },
+                "decided_by": { "type": "string", "enum": ["codex", "bridge", "dsh"] },
                 "decided_at": {
                   "$ref": "#/definitions/wait_taskOutput/properties/task/properties/created_at"
                 }
@@ -171,16 +143,8 @@
             "delegation_evidence": {
               "type": "object",
               "properties": {
-                "children_requested": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 128
-                },
-                "children_completed": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 128
-                },
+                "children_requested": { "type": "integer", "minimum": 0, "maximum": 128 },
+                "children_completed": { "type": "integer", "minimum": 0, "maximum": 128 },
                 "children_failed": {
                   "type": "integer",
                   "minimum": 0,
@@ -202,11 +166,7 @@
                 "observed": {
                   "type": "object",
                   "properties": {
-                    "subagent_calls": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 128
-                    },
+                    "subagent_calls": { "type": "integer", "minimum": 0, "maximum": 128 },
                     "tool_names": {
                       "type": "array",
                       "items": {
@@ -270,32 +230,18 @@
                     "INTERNAL_ERROR"
                   ]
                 },
-                "message": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 4096
-                },
-                "retryable": {
-                  "type": "boolean"
-                },
+                "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                "retryable": { "type": "boolean" },
                 "details": {
                   "type": "object",
                   "additionalProperties": {
                     "anyOf": [
                       {
                         "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "null"
-                          }
+                          { "type": "string" },
+                          { "type": "number" },
+                          { "type": "boolean" },
+                          { "type": "null" }
                         ]
                       },
                       {

@@ -21,6 +21,18 @@ export type Identifier = z.infer<typeof IdentifierSchema>;
 export const ProfileIdSchema = IdentifierSchema;
 export type ProfileId = z.infer<typeof ProfileIdSchema>;
 
+/**
+ * Provider-owned model ids may contain catalog namespaces such as
+ * `vendor/model` while remaining bounded, printable and safe to serialize.
+ * Model ids are never used as filesystem paths by the Bridge.
+ */
+export const ModelIdSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/+@-]*$/, 'must be a safe provider-owned model identifier');
+export type ModelId = z.infer<typeof ModelIdSchema>;
+
 export const TaskIdSchema = IdentifierSchema;
 export type TaskId = z.infer<typeof TaskIdSchema>;
 

@@ -47,6 +47,7 @@ plugins/dsh-codex-bridge/
 ├── .codex-plugin/plugin.json
 ├── .mcp.json
 ├── skills/
+│   ├── setup-dsh-bridge/SKILL.md
 │   └── delegate-to-dsh/SKILL.md
 ├── assets/
 │   └── dsh-orchestrator.toml
@@ -56,6 +57,8 @@ plugins/dsh-codex-bridge/
 职责：
 
 - 声明本地 MCP Server 启动命令。
+- 在配置尚未就绪时保留 Setup-only MCP，让 Codex 可以诊断状态和发现 DSH 模型。
+- 通过设置 Skill 完成首次引导、Profile 预览/写入、Revision 保护和回滚。
 - 通过 Skill 教 Codex 何时委派、如何选择 Profile、如何审查结果。
 - 默认指示 Codex 主线程直接调用 MCP，避免不必要的 Codex Sub-Agent。
 - 提供可选模板，由 `bridge init --codex-agent` 写入项目 `.codex/agents/dsh-orchestrator.toml`。
@@ -211,16 +214,21 @@ Schema 使用带版本的 JSON，生成 JSON Schema 并同时用于：
 
 ### 已实现
 
-| 工具                 | 类型  | 说明                                                                |
-| -------------------- | ----- | ------------------------------------------------------------------- |
-| `list_profiles`      | read  | 返回可用 Profile、能力、预算与限制，不返回密钥或内部 endpoint。     |
-| `delegate_task`      | write | 校验项目与 Profile，创建 Worktree 和异步 DSH Task，快速返回 ID。    |
-| `get_task`           | read  | 返回状态、阶段、时间、进度摘要和可恢复错误。                        |
-| `get_task_result`    | read  | 返回摘要、验收结果、文件统计、测试、Warnings 和 Artifact Manifest。 |
-| `read_task_artifact` | read  | 分页读取 Patch、测试日志或报告，并校验 Hash/大小。                  |
-| `continue_task`      | write | 对同一 DSH Session 提交 Review 反馈，形成下一次运行区间。           |
-| `cancel_task`        | write | 请求取消，等待 Agent 和内部 Sub-Agent 收敛，再回收资源。            |
-| `wait_task`          | read  | 最大 30 秒有界等待，减少忙轮询。                                    |
+| 工具                      | 类型  | 说明                                                                |
+| ------------------------- | ----- | ------------------------------------------------------------------- |
+| `get_setup_status`        | read  | 返回首次设置状态、脱敏检查和可操作下一步。                          |
+| `discover_dsh_models`     | read  | 从 DSH 实时发现 Provider/Model 与可选能力，不返回凭据。             |
+| `preview_profile_change`  | read  | 纯计算并返回语义 Diff 和配置 Revision。                             |
+| `apply_profile_change`    | write | 重验路由与 Revision 后原子写入，并生成有界备份。                    |
+| `rollback_profile_change` | write | 在 Revision 保护下回滚最近一份验证配置。                            |
+| `list_profiles`           | read  | 返回可用 Profile、能力、预算与限制，不返回密钥或内部 endpoint。     |
+| `delegate_task`           | write | 校验项目与 Profile，创建 Worktree 和异步 DSH Task，快速返回 ID。    |
+| `get_task`                | read  | 返回状态、阶段、时间、进度摘要和可恢复错误。                        |
+| `get_task_result`         | read  | 返回摘要、验收结果、文件统计、测试、Warnings 和 Artifact Manifest。 |
+| `read_task_artifact`      | read  | 分页读取 Patch、测试日志或报告，并校验 Hash/大小。                  |
+| `continue_task`           | write | 对同一 DSH Session 提交 Review 反馈，形成下一次运行区间。           |
+| `cancel_task`             | write | 请求取消，等待 Agent 和内部 Sub-Agent 收敛，再回收资源。            |
+| `wait_task`               | read  | 最大 30 秒有界等待，减少忙轮询。                                    |
 
 ### 尚未作为 MCP 工具实现
 

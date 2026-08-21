@@ -8,6 +8,14 @@
 
 Codex 会发现 Profile、判断单 Agent 或多 Agent、提交任务、等待结果并审查证据。
 
+如果这是首次使用，或模型/Profile 配置缺失，直接说：
+
+```text
+帮我完成 DSH Bridge 初次设置。所有配置先预览，确认后再写入。
+```
+
+`setup-dsh-bridge` Skill 会检查状态、发现 DSH 已配置模型并引导建立 Profile；不会要求用户把 API Key 粘贴进对话。
+
 ## 1. 角色分工
 
 ```text
@@ -52,6 +60,16 @@ Bridge 不会自动提交、合并或部署 DSH 的修改。DSH 的文字输出�
 
 不同 Profile 的任务位于不同 Worktree。独立审查必须读取前一个任务的 Patch Artifact，不能假定另一个 Worktree 能看到未提交修改。
 
+### 新增或切换模型
+
+```text
+显示 DSH 当前可用模型。
+把 kimi-k2.7-code 加成 fast-code Profile，先预览，不要写入。
+把 deepseek-v4-flash 设为当前项目默认模型，确认后再修改。
+```
+
+模型必须先存在于 DSH。Codex 只能使用 `discover_dsh_models` 返回的精确 ID，并通过 `preview_profile_change` 展示修改。更新已有 Profile 时只提交最小 `changes`，不覆盖无关安全策略。`apply_profile_change` 必须携带预览时的 Revision；过期 Revision 会要求重新预览。
+
 ## 3. 自动单/多 Agent 规则
 
 Codex 遵循以下判断：
@@ -92,16 +110,21 @@ validating
 
 对应 MCP 工具：
 
-| 工具                 | 用途                                  |
-| -------------------- | ------------------------------------- |
-| `list_profiles`      | 发现可用执行 Profile                  |
-| `delegate_task`      | 创建异步 DSH 任务                     |
-| `get_task`           | 读取当前状态                          |
-| `wait_task`          | 最多等待 30 秒，避免忙轮询            |
-| `get_task_result`    | 获取结构化结果                        |
-| `read_task_artifact` | 分页读取 Patch、状态或摘要            |
-| `continue_task`      | 在同一 DSH Session 和 Worktree 中返工 |
-| `cancel_task`        | 请求取消并等待状态收敛                |
+| 工具                      | 用途                                  |
+| ------------------------- | ------------------------------------- |
+| `get_setup_status`        | 检查首次设置、配置和 Provider 状态    |
+| `discover_dsh_models`     | 发现 DSH 实际 Provider/Model 路由     |
+| `preview_profile_change`  | 校验并预览 Profile 变更               |
+| `apply_profile_change`    | Revision 保护地写入 Profile 变更      |
+| `rollback_profile_change` | 回滚最近一次有效配置备份              |
+| `list_profiles`           | 发现可用执行 Profile                  |
+| `delegate_task`           | 创建异步 DSH 任务                     |
+| `get_task`                | 读取当前状态                          |
+| `wait_task`               | 最多等待 30 秒，避免忙轮询            |
+| `get_task_result`         | 获取结构化结果                        |
+| `read_task_artifact`      | 分页读取 Patch、状态或摘要            |
+| `continue_task`           | 在同一 DSH Session 和 Worktree 中返工 |
+| `cancel_task`             | 请求取消并等待状态收敛                |
 
 通常用户只需表达目标，Codex Skill 会完成这些调用。
 

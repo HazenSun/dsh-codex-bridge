@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { format } from 'prettier';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { PROTOCOL_SCHEMA_REGISTRY } from '../dist/schema-registry.js';
@@ -21,7 +22,11 @@ async function writeSchema(relativePath, schema, name) {
   });
   const target = join(schemaRoot, relativePath);
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+  await writeFile(
+    target,
+    await format(JSON.stringify(output), { parser: 'json', printWidth: 100 }),
+    'utf8',
+  );
 }
 
 for (const [name, schema] of Object.entries(PROTOCOL_SCHEMA_REGISTRY)) {

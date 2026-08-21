@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-bridge",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "description": "A local-first bridge that lets Codex delegate implementation work to DeepSeek Harness agents.",
   "homepage": "https://github.com/HazenSun/dsh-codex-bridge#readme",
@@ -43,6 +43,7 @@
     "test": "vitest run",
     "test:e2e:dsh": "node scripts/real-dsh-e2e.mjs",
     "test:e2e:model-matrix": "node scripts/model-matrix-e2e.mjs",
+    "test:e2e:setup": "node scripts/setup-lifecycle-e2e.mjs",
     "test:watch": "vitest",
     "typecheck": "pnpm -r --if-present typecheck",
     "validate:plugin": "node scripts/validate-codex-plugin.mjs",

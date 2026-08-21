@@ -4,10 +4,7 @@
     "task": {
       "type": "object",
       "properties": {
-        "protocol_version": {
-          "type": "string",
-          "const": "bridge.dsh.dev/v1alpha1"
-        },
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
         "task_id": {
           "type": "string",
           "minLength": 1,
@@ -26,30 +23,14 @@
           "maxLength": 64,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
         },
-        "delegation_depth": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 32
-        },
-        "project_id": {
-          "$ref": "#/definitions/task/properties/task_id"
-        },
-        "workspace_id": {
-          "$ref": "#/definitions/task/properties/task_id"
-        },
-        "profile_id": {
-          "$ref": "#/definitions/task/properties/task_id"
-        },
-        "objective": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100000
-        },
+        "delegation_depth": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "project_id": { "$ref": "#/definitions/task/properties/task_id" },
+        "workspace_id": { "$ref": "#/definitions/task/properties/task_id" },
+        "profile_id": { "$ref": "#/definitions/task/properties/task_id" },
+        "objective": { "type": "string", "minLength": 1, "maxLength": 100000 },
         "acceptance_criteria": {
           "type": "array",
-          "items": {
-            "$ref": "#/definitions/task/properties/objective"
-          },
+          "items": { "$ref": "#/definitions/task/properties/objective" },
           "maxItems": 128
         },
         "status": {
@@ -70,38 +51,17 @@
             "failed"
           ]
         },
-        "run_id": {
-          "$ref": "#/definitions/task/properties/task_id"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "$ref": "#/definitions/task/properties/created_at"
-        },
-        "started_at": {
-          "$ref": "#/definitions/task/properties/created_at"
-        },
-        "finished_at": {
-          "$ref": "#/definitions/task/properties/created_at"
-        },
+        "run_id": { "$ref": "#/definitions/task/properties/task_id" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "$ref": "#/definitions/task/properties/created_at" },
+        "started_at": { "$ref": "#/definitions/task/properties/created_at" },
+        "finished_at": { "$ref": "#/definitions/task/properties/created_at" },
         "progress": {
           "type": "object",
           "properties": {
-            "message": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
-            },
-            "percent": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "updated_at": {
-              "$ref": "#/definitions/task/properties/created_at"
-            }
+            "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "updated_at": { "$ref": "#/definitions/task/properties/created_at" }
           },
           "required": ["updated_at"],
           "additionalProperties": false
@@ -114,14 +74,10 @@
               "enum": ["auto", "single", "multi"],
               "default": "auto"
             },
-            "reason": {
-              "$ref": "#/definitions/task/properties/progress/properties/message"
-            },
+            "reason": { "$ref": "#/definitions/task/properties/progress/properties/message" },
             "roles": {
               "type": "array",
-              "items": {
-                "$ref": "#/definitions/task/properties/task_id"
-              },
+              "items": { "$ref": "#/definitions/task/properties/task_id" },
               "maxItems": 32,
               "default": []
             }
@@ -131,26 +87,12 @@
         "delegation_decision": {
           "type": "object",
           "properties": {
-            "strategy": {
-              "$ref": "#/definitions/task/properties/delegation/properties/strategy"
-            },
-            "resolved_strategy": {
-              "type": "string",
-              "enum": ["single", "multi"]
-            },
-            "reason": {
-              "$ref": "#/definitions/task/properties/objective"
-            },
-            "roles": {
-              "$ref": "#/definitions/task/properties/delegation/properties/roles"
-            },
-            "decided_by": {
-              "type": "string",
-              "enum": ["codex", "bridge", "dsh"]
-            },
-            "decided_at": {
-              "$ref": "#/definitions/task/properties/created_at"
-            }
+            "strategy": { "$ref": "#/definitions/task/properties/delegation/properties/strategy" },
+            "resolved_strategy": { "type": "string", "enum": ["single", "multi"] },
+            "reason": { "$ref": "#/definitions/task/properties/objective" },
+            "roles": { "$ref": "#/definitions/task/properties/delegation/properties/roles" },
+            "decided_by": { "type": "string", "enum": ["codex", "bridge", "dsh"] },
+            "decided_at": { "$ref": "#/definitions/task/properties/created_at" }
           },
           "required": [
             "strategy",
@@ -165,27 +107,12 @@
         "delegation_evidence": {
           "type": "object",
           "properties": {
-            "children_requested": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 128
-            },
-            "children_completed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 128
-            },
-            "children_failed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 128,
-              "default": 0
-            },
+            "children_requested": { "type": "integer", "minimum": 0, "maximum": 128 },
+            "children_completed": { "type": "integer", "minimum": 0, "maximum": 128 },
+            "children_failed": { "type": "integer", "minimum": 0, "maximum": 128, "default": 0 },
             "child_task_ids": {
               "type": "array",
-              "items": {
-                "$ref": "#/definitions/task/properties/task_id"
-              },
+              "items": { "$ref": "#/definitions/task/properties/task_id" },
               "maxItems": 128,
               "default": []
             },
@@ -196,16 +123,10 @@
             "observed": {
               "type": "object",
               "properties": {
-                "subagent_calls": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 128
-                },
+                "subagent_calls": { "type": "integer", "minimum": 0, "maximum": 128 },
                 "tool_names": {
                   "type": "array",
-                  "items": {
-                    "$ref": "#/definitions/task/properties/progress/properties/message"
-                  },
+                  "items": { "$ref": "#/definitions/task/properties/progress/properties/message" },
                   "maxItems": 256
                 }
               },
@@ -215,12 +136,8 @@
             "source": {
               "$ref": "#/definitions/task/properties/delegation_decision/properties/decided_by"
             },
-            "summary": {
-              "$ref": "#/definitions/task/properties/progress/properties/message"
-            },
-            "recorded_at": {
-              "$ref": "#/definitions/task/properties/created_at"
-            }
+            "summary": { "$ref": "#/definitions/task/properties/progress/properties/message" },
+            "recorded_at": { "$ref": "#/definitions/task/properties/created_at" }
           },
           "required": ["children_requested", "children_completed", "source", "recorded_at"],
           "additionalProperties": false
@@ -228,9 +145,7 @@
         "error": {
           "type": "object",
           "properties": {
-            "protocol_version": {
-              "$ref": "#/definitions/task/properties/protocol_version"
-            },
+            "protocol_version": { "$ref": "#/definitions/task/properties/protocol_version" },
             "code": {
               "type": "string",
               "enum": [
@@ -264,32 +179,18 @@
                 "INTERNAL_ERROR"
               ]
             },
-            "message": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
-            },
-            "retryable": {
-              "type": "boolean"
-            },
+            "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "retryable": { "type": "boolean" },
             "details": {
               "type": "object",
               "additionalProperties": {
                 "anyOf": [
                   {
                     "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "null"
-                      }
+                      { "type": "string" },
+                      { "type": "number" },
+                      { "type": "boolean" },
+                      { "type": "null" }
                     ]
                   },
                   {

@@ -1,6 +1,6 @@
 # 安装手册
 
-本手册对应 DSH Codex Bridge `0.1.0-alpha.1`。当前交付方式是从 GitHub 源码安装；npm 包和公共 Codex Plugin Directory 尚未发布。
+本手册对应 DSH Codex Bridge `0.1.0-alpha.2`。当前交付方式是从 GitHub 源码安装；npm 包和公共 Codex Plugin Directory 尚未发布。
 
 ## 1. 支持范围
 
@@ -51,10 +51,10 @@ pnpm dsh-bridge --version
 预期版本：
 
 ```text
-0.1.0-alpha.1
+0.1.0-alpha.2
 ```
 
-## 4. 初始化目标项目
+## 4. 推荐：首次设置向导
 
 目标项目必须是 Git 顶层目录。先设置两个绝对路径：
 
@@ -63,27 +63,57 @@ BRIDGE_SOURCE=/absolute/path/to/dsh-codex-bridge
 BRIDGE_PROJECT=/absolute/path/to/your-git-project
 ```
 
-先查看写入计划：
+先查看完整安装计划，再执行：
 
 ```bash
 cd "$BRIDGE_SOURCE"
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct --dry-run
+pnpm dsh-bridge setup \
+  --project "$BRIDGE_PROJECT" \
+  --source "$BRIDGE_SOURCE" \
+  --dry-run
+
+pnpm dsh-bridge setup \
+  --project "$BRIDGE_PROJECT" \
+  --source "$BRIDGE_SOURCE"
 ```
 
-确认后创建并校验 `bridge.yaml`：
+第二条命令会安装 DSH `codex-bridge` Profile 和 Codex Plugin。没有指定模型时，它不会生成猜测性的 `bridge.yaml`，而是返回 `needs_execution_profile`。新建 Codex 任务后说：
+
+```text
+帮我完成 DSH Bridge 初次设置。所有配置先预览，确认后再写入。
+```
+
+Codex 会通过 `get_setup_status` 与 `discover_dsh_models` 读取 DSH 已配置的非敏感模型目录。首次创建 `bridge.yaml` 时，Codex 会先展示将要执行的精确 `setup` 命令；文件存在后的 Profile 变更使用 MCP 语义 Diff。若 DSH 没有可用 Provider，流程会停下并要求你先在 DSH Settings 中配置凭据；不要把密钥粘贴进 Codex 对话。
+
+也可使用 CLI 指定已经确认的精确路由：
 
 ```bash
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct
+pnpm dsh-bridge models list --config "$BRIDGE_PROJECT/bridge.yaml" --details
+
+pnpm dsh-bridge setup \
+  --project "$BRIDGE_PROJECT" \
+  --source "$BRIDGE_SOURCE" \
+  --provider <provider-id> \
+  --model <model-id> \
+  --profile-id default-code \
+  --reasoning-effort <advertised-effort>
 ```
 
-如果目标项目已经有 `bridge.yaml`，CLI 会拒绝覆盖。只有明确希望替换时才使用 `--force`。
+首次设置完成后必须新建 Codex 任务，使运行 MCP 加载新配置。
 
-## 5. 安装 DSH Profile 和 Codex Plugin
+## 5. 手动拆分安装
 
-Direct Mode 是默认且推荐的方式：
+需要排障或自动化时，可以分别执行 `init` 与 `install`。`init` 支持显式模型参数；不要省略模型参数后直接使用示例路由：
 
 ```bash
 cd "$BRIDGE_SOURCE"
+pnpm dsh-bridge init "$BRIDGE_PROJECT" \
+  --mode direct \
+  --provider <provider-id> \
+  --model <model-id> \
+  --profile-id default-code \
+  --reasoning-effort <advertised-effort>
+
 pnpm dsh-bridge install \
   --source "$BRIDGE_SOURCE" \
   --codex \
@@ -99,7 +129,9 @@ pnpm dsh-bridge install \
 4. 安装并启用 `dsh-codex-bridge` Plugin；
 5. 保留现有 Provider 凭据，不把密钥复制到目标项目。
 
-安装完成后必须新建 Codex 任务。已经打开的任务不会自动重新加载 Plugin 或 MCP 工具。
+DSH Profile 中已存在的 `cordis.yml` 和 `cordis.patch.yml` 作为用户组成/覆盖保留；安装器只更新它管理的 package/workspace 文件，且替换前备份到 Profile 内的 `.bridge-install-backups/`。如果同名目录不是 Bridge Profile，安装会拒绝覆盖。
+
+目标项目已有 `bridge.yaml` 时，CLI 会拒绝覆盖；只有明确希望替换时才使用 `--force`。安装完成后必须新建 Codex 任务。已经打开的任务不会自动重新加载 Plugin 或 MCP 工具。
 
 ## 6. 健康检查
 
@@ -123,13 +155,74 @@ pnpm dsh-bridge profiles list \
 - `codex-bridge` DSH Profile 为 `ready`；
 - 项目配置可解析；
 - MCP 为 `ready`；
-- 八个工具可发现：`list_profiles`、`delegate_task`、`get_task`、`wait_task`、`get_task_result`、`read_task_artifact`、`continue_task`、`cancel_task`。
+- 五个设置工具可发现：`get_setup_status`、`discover_dsh_models`、`preview_profile_change`、`apply_profile_change`、`rollback_profile_change`；
+- 配置就绪后，八个执行工具也可发现：`list_profiles`、`delegate_task`、`get_task`、`wait_task`、`get_task_result`、`read_task_artifact`、`continue_task`、`cancel_task`。
 
 `doctor` 不调用付费模型。Provider 和模型可用性要通过一个小任务或真实 E2E 验证。
 
-## 7. 配置执行 Profile
+## 7. 新增、切换与回滚执行 Profile
 
-初始化生成的 `bridge.yaml` 默认使用 DeepSeek 示例路由。根据 DSH 中真实存在的 Provider 和 Model 修改：
+完整的模型入网有两步：
+
+1. 在 DSH 中配置 Provider/Model 和凭据；
+2. 在 Bridge 中创建或更新命名 Profile，使 Codex 能按用途路由。
+
+新模型不需要 Bridge 发版或改代码，前提是 DSH 已经能通过它的 Provider Adapter 列出和调用该模型。
+
+不要直接让 Codex 自由改写 YAML。Bridge 提供“预览 → 确认 → Revision 保护写入 → 验证”的受控路径：
+
+```text
+显示 DSH 当前可用模型。
+把选中的模型添加成 fast-code Profile，先预览，不写入。
+确认刚才的 Profile 修改。
+把 fast-code 设为当前项目默认模型。
+```
+
+CLI 等价操作：
+
+```bash
+# 只预览；记录输出的 before_revision
+pnpm dsh-bridge profiles add fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <provider-id> \
+  --model <model-id> \
+  --reasoning-effort high
+
+# 用户审查后才写入
+pnpm dsh-bridge profiles add fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <provider-id> \
+  --model <model-id> \
+  --reasoning-effort high \
+  --apply \
+  --expected-revision <before_revision>
+
+# 预览切换已有 Profile 的路由
+pnpm dsh-bridge profiles update fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <provider-id> \
+  --model <new-model-id> \
+  --reasoning-effort <advertised-effort>
+
+# 审查后重复上一条命令，加上：
+# --apply --expected-revision <before_revision>
+
+# 默认 Profile 变更先预览
+pnpm dsh-bridge profiles set-default fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --project-id <project-id>
+
+# 确认后重复 set-default，加上：
+# --apply --expected-revision <before_revision>
+
+pnpm dsh-bridge profiles rollback \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --expected-revision <current_revision>
+```
+
+写入使用同目录临时文件、`0600` 权限和原子重命名；备份位于目标项目的 `.dsh-codex-bridge/config-backups/`。过期 Revision 会失败，必须重新预览。MCP 还会拒绝 DSH 实时目录中不存在的 Provider/Model 和已明确不支持的 Reasoning Effort。Provider 凭据仍由 DSH 管理，不会出现在 Diff 或备份中。
+
+完整 Profile 结构示例：
 
 ```yaml
 profiles:

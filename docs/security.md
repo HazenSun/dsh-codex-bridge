@@ -2,7 +2,7 @@
 
 DSH × Codex Bridge 会让一个本地 Agent 在代码目录、Shell、网络和模型 Provider 之间流动。安全目标不是让 Agent“永远正确”，而是把它限制在可审查、可取消、可恢复的边界内。
 
-> 本页描述 `0.1.0-alpha.1` 的安全基线和剩余缺口。已执行约束与配置中预留但尚未接入的策略必须区分；单独阅读文档不能替代运行验证。
+> 本页描述 `0.1.0-alpha.2` 的安全基线和剩余缺口。已执行约束与配置中预留但尚未接入的策略必须区分；单独阅读文档不能替代运行验证。
 
 ## 1. Trust boundaries
 
@@ -40,7 +40,7 @@ Worktree、Shell、网络、Artifact Store
 | 任务超时      | 有限 Wall Time                  | 取消失效时仍可回收资源                   |
 | 结果          | 结构化、带 Hash、可分页         | 防止日志和大 Diff 污染上下文             |
 
-`0.1.0-alpha.1` 默认不启用 `direct_write`、自动部署、自动提交或自动合并。网络策略字段尚未完整映射到 Bridge 执行器，因此高敏感项目应在操作系统、容器或网络层增加独立限制。
+`0.1.0-alpha.2` 默认不启用 `direct_write`、自动部署、自动提交或自动合并。网络策略字段尚未完整映射到 Bridge 执行器，因此高敏感项目应在操作系统、容器或网络层增加独立限制。
 
 ## 3. 文件系统与 Worktree
 
@@ -88,6 +88,18 @@ Cookie: ...
 ```
 
 脱敏不是权限替代品。Provider credential 应该从架构上不经过 Bridge；脱敏只是最后一道防线。
+
+### 配置写入边界
+
+Codex 不应用通用文件编辑器自由重写 `bridge.yaml`。受控路径会：
+
+- 先返回语义 Diff，写入需要用户批准与预览时的 SHA-256 Revision；
+- 对新增/更新路由重新查询 DSH 实时模型目录；
+- 递归拒绝 `api_key`、Token、Cookie、Authorization、Secret 和私有 Endpoint 类字段/值；
+- 使用同目录临时文件、`0600`、`fsync` 和原子重命名，避免半写入文件；
+- 在 `.dsh-codex-bridge/config-backups/` 保留有界验证备份，回滚也要求当前 Revision。
+
+Revision 是并发保护，不是身份认证。对他人可写的工作区仍应依赖操作系统文件权限和仓库审查。
 
 ## 5. Shell、工具与网络
 
@@ -165,7 +177,10 @@ handle.dispose()
 
 ```bash
 pnpm test:e2e:dsh
+pnpm test:e2e:setup
 ```
+
+发布人应设置 `DSH_BRIDGE_EVIDENCE_DIR` 到仓库外的临时目录，不提交原始运行日志、本地路径或新的凭据化执行产物。
 
 它会真实启动 DSH `0.1.0-rc.8` 的 `codex-bridge` Profile，调用当前机器配置的 Provider/Model，而不是 Fake LLM。测试在临时 Git Fixture 中验证 MCP 工具、Profile 路由、隔离 Worktree、Patch、Artifact Hash 和主工作区不变；可复核证据为 [`real-dsh-rc8.json`](../tests/e2e/evidence/real-dsh-rc8.json) 与 [`real-dsh-rc8.patch`](../tests/e2e/evidence/real-dsh-rc8.patch)。
 

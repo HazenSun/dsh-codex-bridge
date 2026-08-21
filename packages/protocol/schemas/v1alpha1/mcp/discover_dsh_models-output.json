@@ -1,0 +1,71 @@
+{
+  "$ref": "#/definitions/discover_dsh_modelsOutput",
+  "definitions": {
+    "discover_dsh_modelsOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+              },
+              "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+              "configured": { "type": "boolean" },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+@-]*$"
+                    },
+                    "name": {
+                      "$ref": "#/definitions/discover_dsh_modelsOutput/properties/providers/items/properties/name"
+                    },
+                    "description": { "type": "string", "minLength": 1, "maxLength": 100000 },
+                    "input_modalities": {
+                      "type": "array",
+                      "items": { "type": "string", "enum": ["text", "image"] },
+                      "maxItems": 2
+                    },
+                    "reasoning_efforts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/discover_dsh_modelsOutput/properties/providers/items/properties/provider"
+                      },
+                      "maxItems": 32
+                    },
+                    "default_reasoning_effort": {
+                      "$ref": "#/definitions/discover_dsh_modelsOutput/properties/providers/items/properties/provider"
+                    },
+                    "context_window": { "type": "integer", "exclusiveMinimum": 0 },
+                    "default_max_tokens": { "type": "integer", "exclusiveMinimum": 0 }
+                  },
+                  "required": ["model", "name"],
+                  "additionalProperties": false
+                },
+                "maxItems": 2048
+              }
+            },
+            "required": ["provider", "name", "configured", "models"],
+            "additionalProperties": false
+          },
+          "maxItems": 256
+        }
+      },
+      "required": ["protocol_version", "providers"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

@@ -4,16 +4,8 @@
     "delegation_request": {
       "type": "object",
       "properties": {
-        "strategy": {
-          "type": "string",
-          "enum": ["auto", "single", "multi"],
-          "default": "auto"
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
+        "strategy": { "type": "string", "enum": ["auto", "single", "multi"], "default": "auto" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 4096 },
         "roles": {
           "type": "array",
           "items": {

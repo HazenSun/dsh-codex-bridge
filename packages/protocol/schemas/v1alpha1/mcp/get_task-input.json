@@ -4,10 +4,7 @@
     "get_taskInput": {
       "type": "object",
       "properties": {
-        "protocol_version": {
-          "type": "string",
-          "const": "bridge.dsh.dev/v1alpha1"
-        },
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
         "task_id": {
           "type": "string",
           "minLength": 1,

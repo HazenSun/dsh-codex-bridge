@@ -4,18 +4,10 @@
     "delegation_observed_evidence": {
       "type": "object",
       "properties": {
-        "subagent_calls": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 128
-        },
+        "subagent_calls": { "type": "integer", "minimum": 0, "maximum": 128 },
         "tool_names": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096
-          },
+          "items": { "type": "string", "minLength": 1, "maxLength": 4096 },
           "maxItems": 256
         }
       },

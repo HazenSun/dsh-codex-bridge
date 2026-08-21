@@ -4,6 +4,7 @@ import {
   IdentifierSchema,
   LongTextSchema,
   MetadataSchema,
+  ModelIdSchema,
   NonNegativeIntSchema,
   PositiveIntSchema,
   ProfileIdSchema,
@@ -25,7 +26,7 @@ export type WorkspaceMode = z.infer<typeof WorkspaceModeSchema>;
 export const ModelRouteSchema = z
   .object({
     provider: IdentifierSchema,
-    model: IdentifierSchema,
+    model: ModelIdSchema,
     reasoning_effort: ReasoningEffortSchema.optional(),
     max_tokens: PositiveIntSchema.max(1_000_000).optional(),
   })
@@ -52,7 +53,7 @@ export type DelegationPolicy = z.infer<typeof DelegationPolicySchema>;
 export const DshProfileConfigSchema = z
   .object({
     provider: IdentifierSchema,
-    model: IdentifierSchema,
+    model: ModelIdSchema,
     reasoning_effort: ReasoningEffortSchema.optional(),
     agent_preset: IdentifierSchema,
     max_tokens: PositiveIntSchema.max(1_000_000),

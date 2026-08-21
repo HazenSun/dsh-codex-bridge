@@ -11,6 +11,16 @@ import {
   DelegateTaskOutputSchema,
   DoctorInputSchema,
   DoctorOutputSchema,
+  GetSetupStatusInputSchema,
+  GetSetupStatusOutputSchema,
+  DiscoverDshModelsInputSchema,
+  DiscoverDshModelsOutputSchema,
+  PreviewProfileChangeInputSchema,
+  PreviewProfileChangeOutputSchema,
+  ApplyProfileChangeInputSchema,
+  ApplyProfileChangeOutputSchema,
+  RollbackProfileChangeInputSchema,
+  RollbackProfileChangeOutputSchema,
   GetTaskResultInputSchema,
   ListProfilesInputSchema,
   ListProfilesOutputSchema,
@@ -48,6 +58,26 @@ export const PROTOCOL_SCHEMA_REGISTRY = {
   task_result: TaskResultSchema,
   artifact_ref: ArtifactRefSchema,
   mcp: {
+    get_setup_status: {
+      input: GetSetupStatusInputSchema,
+      output: GetSetupStatusOutputSchema,
+    },
+    discover_dsh_models: {
+      input: DiscoverDshModelsInputSchema,
+      output: DiscoverDshModelsOutputSchema,
+    },
+    preview_profile_change: {
+      input: PreviewProfileChangeInputSchema,
+      output: PreviewProfileChangeOutputSchema,
+    },
+    apply_profile_change: {
+      input: ApplyProfileChangeInputSchema,
+      output: ApplyProfileChangeOutputSchema,
+    },
+    rollback_profile_change: {
+      input: RollbackProfileChangeInputSchema,
+      output: RollbackProfileChangeOutputSchema,
+    },
     list_profiles: {
       input: ListProfilesInputSchema,
       output: ListProfilesOutputSchema,

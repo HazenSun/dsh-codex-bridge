@@ -4,7 +4,7 @@
 
 先把问题分成四层：运行时、MCP、DSH/Provider、任务工作区。不要一开始就重装所有组件；先收集可复核、已脱敏的证据。
 
-> 本文中的 Bridge CLI 由源码 workspace 提供，版本为 `0.1.0-alpha.1`。所有命令都从源码 checkout 执行，并使用 `pnpm dsh-bridge ...`。
+> 本文中的 Bridge CLI 由源码 workspace 提供，版本为 `0.1.0-alpha.2`。所有命令都从源码 checkout 执行，并使用 `pnpm dsh-bridge ...`。
 
 ## 1. 最短诊断路径
 
@@ -47,7 +47,26 @@ pnpm dsh-bridge --help
 
 当前版本只支持源码入口；不要从未经验证的全局包安装同名命令。npm 包和 Marketplace 包尚未发布，只有正式 Release Notes 发布后才可使用对应安装方式。
 
-## 3. Node / DSH 版本不兼容
+## 3. 首次设置停在某个状态
+
+`get_setup_status` 和 `setup` 会保守地返回可恢复状态：
+
+| 状态                                               | 处理                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `needs_dsh` / `needs_dsh_profile`                  | 安装精确 DSH 版本，然后重跑 `pnpm dsh-bridge setup --project <path> --source <path>` |
+| `needs_provider`                                   | 在 DSH Settings 或官方凭据引用中配置 Provider；不要把密钥粘贴给 Codex                |
+| `needs_project_config` / `needs_execution_profile` | 运行 `models list`，然后用返回的精确 Provider/Model 重跑 `setup`                     |
+| `degraded`                                         | 检查返回的 `checks` 和 `next_actions`，修复无效 YAML 或缺失路由                      |
+| `ready`                                            | 新建 Codex 任务后运行 `list_profiles`                                                |
+
+```bash
+pnpm dsh-bridge setup --project /path/to/project --source . --dry-run
+pnpm dsh-bridge models list --config /path/to/project/bridge.yaml --details
+```
+
+`models list` 在 `bridge.yaml` 尚未存在时也可以工作，前提是 DSH `codex-bridge` Profile 已安装。
+
+## 4. Node / DSH 版本不兼容
 
 **症状**：Bundle 加载失败、TypeScript 运行时错误、Agent API 不存在、`doctor` 报版本不支持。
 
@@ -60,7 +79,7 @@ dsh --version
 
 当前兼容基线是 DSH `0.1.0-rc.8`。不要通过删除锁文件、安装 `latest` 或手工替换 `node_modules` 绕过检查。不同 DSH 版本应先查 Compatibility Matrix 和 Contract Test。
 
-## 4. DSH Plugin / Profile 找不到
+## 5. DSH Plugin / Profile 找不到
 
 **症状**：`codex-bridge` Profile 不存在、Bundle 无法加载、`dsh --profile codex-bridge` 立即退出。
 
@@ -81,7 +100,7 @@ pnpm dsh-bridge profiles list
 
 保留 stderr 和 `doctor` 输出；不要把 DSH 的交互式 UI 或 CLI 文本解析当作修复方案。
 
-## 5. Codex 看不到 MCP 工具
+## 6. Codex 看不到 MCP 工具
 
 **症状**：Codex 无法发现 `list_profiles`、`delegate_task`，或新会话中工具列表为空。
 
@@ -95,7 +114,7 @@ pnpm dsh-bridge profiles list
 
 MCP stdout 必须只包含协议帧。日志应写 stderr 或受控文件；任何 stdout 污染都会让 Codex 认为连接损坏。
 
-## 6. Provider 缺失、认证失败或模型不支持
+## 7. Provider 缺失、认证失败或模型不支持
 
 **症状**：Profile 可以列出，但任务在 `validating` 或 `starting` 阶段失败。
 
@@ -108,7 +127,11 @@ pnpm dsh-bridge config show --effective --redacted
 
 确认 Provider ID、Model ID、Reasoning ID 和 Agent Preset 都在 DSH 中真实存在。Bridge 不会把 API Key 复制到项目配置，也不应把不支持的 `reasoningEffort` 静默改成 `medium`。错误应明确指出“缺少 Provider”“认证失败”“模型不存在”或“Reasoning 不支持”。
 
-## 7. 任务长期停留在 `queued`
+### Revision 冲突
+
+如果 `apply_profile_change` 或 CLI 返回 `CONFIG_REVISION_CONFLICT`，说明预览后文件被另一个进程或用户修改。不要绕过 Revision；重新运行预览，审查新 Diff，再用新的 `before_revision` 写入。
+
+## 8. 任务长期停留在 `queued`
 
 **可能原因**：全局/项目并发上限、Provider 限流、旧任务未终止、磁盘配额不足。
 
@@ -122,7 +145,7 @@ pnpm dsh-bridge doctor --json --redacted
 
 不要重复点击 `delegate_task` 造成重复任务。确认现有任务是否仍处于 `running`，再等待有界时间或对明确失控的任务调用 `cancel_task`。
 
-## 8. 任务无法取消或仍有进程
+## 9. 任务无法取消或仍有进程
 
 **处理顺序**：
 
@@ -136,7 +159,7 @@ cancel_task(task_id)
 
 取消是幂等操作。不要直接杀掉整个 DSH 宿主进程，除非进程组回收已经失效且你确认这不会影响其他任务。取消后检查状态是否为 `cancelled` 或 `timed_out`，并确认 Worktree 未被删除。
 
-## 9. Worktree 创建失败或主工作区变脏
+## 10. Worktree 创建失败或主工作区变脏
 
 **原因**：不是 Git 仓库、工作区路径不在 Allowed Root、已有同名 Worktree、磁盘空间不足，或用户同时在主工作区写入。
 
@@ -151,7 +174,7 @@ pnpm dsh-bridge doctor --json --redacted
 
 Bridge 默认不应为了创建任务而执行 `git reset`、`git clean` 或覆盖用户修改。先保存用户工作，再清理已经确认终态的旧 Task；清理前优先使用 `--dry-run`。
 
-## 10. 结果缺少 Diff、测试或 Artifact
+## 11. 结果缺少 Diff、测试或 Artifact
 
 **症状**：Task 显示 `completed`，但结果没有可审查证据。
 
@@ -165,7 +188,7 @@ Bridge 默认不应为了创建任务而执行 `git reset`、`git clean` 或覆�
 
 没有证据的“完成”不能被 Codex 直接接受，应标为 `partial` 或 `failed`，并通过 `continue_task` 要求补证据。
 
-## 11. Bridge 重启后任务变成 `interrupted`
+## 12. Bridge 重启后任务变成 `interrupted`
 
 这通常是正确的保守行为：Bridge 无法证明任务在崩溃时已完成。保留 Task Store、事件和 Worktree，先获取：
 
@@ -176,7 +199,7 @@ get_task_result(task_id)
 
 然后根据已有证据选择继续、重试或清理。不要手工把状态文件改成 `completed`，否则会破坏审计链。
 
-## 12. Native Shell Agent 没有出现
+## 13. Native Shell Agent 没有出现
 
 Native Shell 是可选能力，不是 Direct Mode 的前置条件。确认你显式运行了安装命令：
 
@@ -186,19 +209,20 @@ pnpm dsh-bridge install --source . --codex-agent --mode native-shell
 
 然后检查项目 `.codex/agents/dsh-orchestrator.toml` 是否生成、MCP 是否可访问，并重新打开 Codex 会话。该 Agent 只是调度外壳；DSH 仍在独立 Runtime 中执行，不能期待 DSH 模型显示为 Codex 原生模型。
 
-## 13. 复现真实 DSH 闭环
+## 14. 复现真实 DSH 闭环
 
 从源码 checkout 执行：
 
 ```bash
 pnpm test:e2e:dsh
+pnpm test:e2e:setup
 ```
 
 测试会启动 DSH `0.1.0-rc.8` 的 `codex-bridge` Profile，调用当前机器已配置的真实 Provider/Model，通过 STDIO MCP 验证 Profile 列表、异步任务、继续/取消工具、隔离 Worktree、Patch 和 Artifact Hash。它不是 Fake LLM 测试；如果 Provider 凭据、DSH Profile 或网络不可用，测试会失败并在 stderr 报告原因。
 
 已记录的闭环证据：[`real-dsh-rc8.json`](../tests/e2e/evidence/real-dsh-rc8.json)、[`real-dsh-rc8.patch`](../tests/e2e/evidence/real-dsh-rc8.patch)。不要把 Provider 密钥或未经脱敏的 E2E 日志提交到仓库。
 
-## 14. 日志污染、重复任务或递归委派
+## 15. 日志污染、重复任务或递归委派
 
 ### stdout 污染
 
@@ -212,7 +236,7 @@ pnpm test:e2e:dsh
 
 确认 Profile 禁用了反向 Codex Provider，且 `delegation_depth`、`max_depth`、`max_children` 已生效。递归调用应快速失败，并回收已创建资源。
 
-## 15. 最小问题报告模板
+## 16. 最小问题报告模板
 
 提交非安全问题时，提供：
 

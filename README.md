@@ -13,9 +13,9 @@
 
 ## 项目状态
 
-**源码可用｜`0.1.0-alpha.1`｜DSH `0.1.0-rc.8` 闭环已验证**
+**源码可用｜`0.1.0-alpha.2`｜DSH `0.1.0-rc.8` 闭环已验证**
 
-当前版本可以从源码构建、初始化项目、安装本地 DSH Profile 与 Codex Plugin、运行健康检查，并通过 MCP 驱动 DSH 完成隔离 Worktree 任务。真实 Provider 闭环证据保存在 [`real-dsh-rc8.json`](tests/e2e/evidence/real-dsh-rc8.json)、[`real-dsh-rc8.patch`](tests/e2e/evidence/real-dsh-rc8.patch) 与 [`real-dsh-rc8-continue.patch`](tests/e2e/evidence/real-dsh-rc8-continue.patch)。
+当前版本可以从源码构建、初始化项目、安装本地 DSH Profile 与 Codex Plugin、运行健康检查，并通过 MCP 驱动 DSH 完成隔离 Worktree 任务。Alpha 1 的脱敏证据保存在 [`tests/e2e/evidence`](tests/e2e/evidence/)；Alpha 2 已通过可复现的 setup lifecycle、DeepSeek 闭环和 Kimi/DeepSeek model matrix，但按发布策略不提交本地执行日志。
 
 当前发布形态是源码安装；npm 包和 Marketplace 公共发布尚未进行。第一版锁定的 DSH 兼容基线是 `0.1.0-rc.8`。DSH 处于 Developer Preview，因此升级 DSH 必须经过兼容性测试，不能仅凭版本号推断可用。
 
@@ -39,42 +39,98 @@ DSH Plugin（Profile / 模型 / 工具 / Sub-Agent）
 
 Bridge 不把 DSH 宣称为 Codex 原生模型或原生 Sub-Agent。默认的 **Direct Mode** 是 Codex 主线程直接调用 Bridge MCP；可选的 **Native Shell Mode** 会生成一个窄职责的 Codex 自定义 Agent 作为调度外壳，以获得更接近原生线程的体验，但会额外消耗 Codex 用量。
 
-## 10 分钟 Quickstart（源码可用）
+## 3 分钟安装与首次设置（源码版）
 
 当前请使用源码路径；npm 与 Marketplace 尚未发布，不要从公共 registry 或目录安装同名包。
 
-### 源码安装（当前开发路径）
-
-前置条件：Node.js `22.19+` 或 `24+`、pnpm、Git、可运行的 DSH `0.1.0-rc.8`、Codex CLI 或 Desktop，以及至少一个已在 DSH 中配置好的 Provider。
+前置条件：Node.js `22.19+` 或 `24+`、pnpm、Git、DSH `0.1.0-rc.8` 和 Codex CLI/Desktop。Provider 凭据只在 DSH 中配置，不要粘贴给 Codex 或写入 `bridge.yaml`。
 
 ```bash
 git clone https://github.com/HazenSun/dsh-codex-bridge.git
 cd dsh-codex-bridge
 corepack enable
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build
-pnpm dsh-bridge --help
+
+BRIDGE_PROJECT=/absolute/path/to/your-project
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source . --dry-run
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source .
 ```
 
-初始化、安装和健康检查：
+第二条 `setup` 命令安装本地 DSH Profile 与 Codex Plugin。若项目还没有 `bridge.yaml`，它会停在 `needs_execution_profile`，不会猜测模型或复制凭据。新建 Codex 任务并直接说：
+
+```text
+帮我完成 DSH Bridge 初次设置。所有配置先预览，确认后再写入。
+```
+
+Codex 会检查状态、读取 DSH 已配置的 Provider/Model、建议一个语义化 Profile，并在首次创建前展示精确的 `setup` 计划。`bridge.yaml` 存在后，所有 Profile 变更都先展示语义 Diff。DSH 尚未配置 Provider 时，流程会停下并引导你在 DSH Settings 中完成凭据设置。
+
+也可以完全使用 CLI。先发现 DSH 模型，再用精确 ID 完成首次配置：
 
 ```bash
-BRIDGE_PROJECT=/absolute/path/to/your-project
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct
-pnpm dsh-bridge install --source . --codex --dsh --mode direct
-pnpm dsh-bridge doctor --config "$BRIDGE_PROJECT/bridge.yaml" --json --redacted
-pnpm dsh-bridge profiles validate --config "$BRIDGE_PROJECT/bridge.yaml"
+pnpm dsh-bridge models list --config "$BRIDGE_PROJECT/bridge.yaml" --details
+pnpm dsh-bridge setup \
+  --project "$BRIDGE_PROJECT" \
+  --source . \
+  --provider <dsh-provider-id> \
+  --model <dsh-model-id> \
+  --profile-id default-code \
+  --reasoning-effort <advertised-effort>
 ```
 
-然后在 Codex 新会话中调用 `list_profiles`，再使用 `delegate_task` 委派一个只读或小范围实现任务。默认任务使用独立 Git Worktree，主工作区不应被直接修改。
-
-安装完成后不需要记忆工具名。直接告诉 Codex：
+首次设置完成后，在新 Codex 任务中直接说：
 
 ```text
 使用 DSH 处理这个任务，自己判断单 Agent 还是多 Agent。
 ```
 
 `delegate-to-dsh` Skill 会发现可用 Profile，根据独立工作流和审查收益选择 `single` 或 `multi`，并把理由和角色写入任务。显式说“单 Agent”或“多 Agent”始终覆盖自动判断。多 Agent 只有在 DSH Session 中观察到足够的子 Agent 调用和完成事件后才算通过。
+
+## 用 Codex 新增、切换和回滚模型
+
+新模型的底层支持只需在 DSH 中增加 Provider/Model；但要让 Codex 安全调用，还需将它映射成 Bridge 的命名 Profile。完成 DSH 配置后，可以直接告诉 Codex：
+
+```text
+显示 DSH 当前可用模型。
+把 kimi-k2.7-code 加成 fast-code Profile，先预览，不要写入。
+把 deepseek-v4-flash 设为当前项目默认模型，确认后再修改。
+回滚上一次 Bridge 模型配置。
+```
+
+Codex 只能选择 `discover_dsh_models` 实际返回的路由。每次写入都必须先预览，使用 SHA-256 Revision 防止覆盖并发修改，成功前会创建 `0600` 权限的有界备份。等价 CLI：
+
+```bash
+# 预览新增；输出 before_revision
+pnpm dsh-bridge profiles add fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <dsh-provider-id> \
+  --model <dsh-model-id> \
+  --reasoning-effort high
+
+# 审查后写入
+pnpm dsh-bridge profiles add fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <dsh-provider-id> \
+  --model <dsh-model-id> \
+  --reasoning-effort high \
+  --apply --expected-revision <before_revision>
+
+# 预览把已有 Profile 切到另一个 DSH 模型
+pnpm dsh-bridge profiles update fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <dsh-provider-id> \
+  --model <dsh-model-id> \
+  --reasoning-effort high
+
+# 设置默认同样先预览，再带 Revision 重复执行并加 --apply
+pnpm dsh-bridge profiles set-default fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --project-id <project-id>
+```
+
+默认情况下，配置变更只影响后续任务；工具返回 `restart_required: true` 时请新建 Codex 任务。完整命令与安全边界见[安装手册](docs/installation.md)和[配置参考](docs/configuration.md)。
+
+安装/配置只会处理 `bridge.yaml`、`.dsh-codex-bridge/config-backups/`、DSH `codex-bridge` Profile 和 Codex Plugin；不会修改项目源码、主分支、`.env` 或 DSH 凭据。
 
 ### 真实 DSH 闭环验证
 
@@ -83,7 +139,10 @@ pnpm dsh-bridge profiles validate --config "$BRIDGE_PROJECT/bridge.yaml"
 ```bash
 pnpm test:e2e:dsh
 pnpm test:e2e:model-matrix
+pnpm test:e2e:setup
 ```
+
+发布验证时可用 `DSH_BRIDGE_EVIDENCE_DIR=/tmp/dsh-bridge-evidence` 把 E2E 运行证据写到仓库外；`test:e2e:setup` 只向 stdout 返回脱敏检查摘要。
 
 对应证据：[`real-dsh-rc8.json`](tests/e2e/evidence/real-dsh-rc8.json)、[`real-dsh-rc8.patch`](tests/e2e/evidence/real-dsh-rc8.patch)、[`real-dsh-rc8-continue.patch`](tests/e2e/evidence/real-dsh-rc8-continue.patch) 与 [`model-matrix.json`](tests/e2e/evidence/model-matrix.json)。运行前必须完成 DSH Provider 配置；测试会产生真实网络/模型调用，并在临时 Git Fixture 中验证任务状态、模型路由、自动单/多 Agent 决策、子 Agent 事件、Artifact Hash、同 Session 继续、真实取消和主工作区不变。
 

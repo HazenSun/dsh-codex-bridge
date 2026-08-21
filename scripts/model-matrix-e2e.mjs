@@ -11,7 +11,10 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = await mkdtemp(join(tmpdir(), 'dsh-model-matrix-'));
-const evidencePath = resolve(root, 'tests/e2e/evidence/model-matrix.json');
+const evidencePath = resolve(
+  process.env.DSH_BRIDGE_EVIDENCE_DIR ?? resolve(root, 'tests/e2e/evidence'),
+  'model-matrix.json',
+);
 const stderrLines = [];
 
 function environment(overrides) {
@@ -244,7 +247,7 @@ async function main() {
     stderr: 'pipe',
   });
   transport.stderr?.on('data', (chunk) => stderrLines.push(...String(chunk).split('\n')));
-  const client = new Client({ name: 'dsh-model-matrix', version: '0.1.0-alpha.1' });
+  const client = new Client({ name: 'dsh-model-matrix', version: '0.1.0-alpha.2' });
   let succeeded = false;
   try {
     await client.connect(transport, { timeout: 15_000 });

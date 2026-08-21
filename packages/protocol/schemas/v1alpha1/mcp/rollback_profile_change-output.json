@@ -1,0 +1,30 @@
+{
+  "$ref": "#/definitions/rollback_profile_changeOutput",
+  "definitions": {
+    "rollback_profile_changeOutput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
+        "config_path": { "type": "string", "minLength": 1, "maxLength": 100000 },
+        "previous_revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "config_revision": {
+          "$ref": "#/definitions/rollback_profile_changeOutput/properties/previous_revision"
+        },
+        "changed": { "type": "boolean" },
+        "restart_required": { "type": "boolean" },
+        "restored_from": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      },
+      "required": [
+        "protocol_version",
+        "config_path",
+        "previous_revision",
+        "config_revision",
+        "changed",
+        "restart_required",
+        "restored_from"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

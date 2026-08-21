@@ -1,0 +1,405 @@
+{
+  "$ref": "#/definitions/apply_profile_changeInput",
+  "definitions": {
+    "apply_profile_changeInput": {
+      "type": "object",
+      "properties": {
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
+        "change": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "operation": { "type": "string", "const": "add" },
+                "profile": {
+                  "type": "object",
+                  "properties": {
+                    "description": { "type": "string", "minLength": 1, "maxLength": 100000 },
+                    "dsh": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+@-]*$"
+                        },
+                        "reasoning_effort": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                        },
+                        "agent_preset": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                        },
+                        "max_tokens": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        }
+                      },
+                      "required": ["provider", "model", "agent_preset", "max_tokens"],
+                      "additionalProperties": false
+                    },
+                    "delegation": {
+                      "type": "object",
+                      "properties": {
+                        "max_depth": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 32,
+                          "default": 0
+                        },
+                        "max_children": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 128,
+                          "default": 0
+                        },
+                        "roles": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                              },
+                              "model": {
+                                "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/model"
+                              },
+                              "reasoning_effort": {
+                                "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                              },
+                              "max_tokens": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1000000
+                              },
+                              "description": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                            },
+                            "required": ["provider", "model"],
+                            "additionalProperties": false
+                          },
+                          "propertyNames": {
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                          },
+                          "default": {}
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "workspace": {
+                      "type": "object",
+                      "properties": {
+                        "mode": { "type": "string", "enum": ["isolated_worktree", "patch_only"] },
+                        "allowed_roots": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/roles/additionalProperties/properties/description"
+                          },
+                          "maxItems": 64,
+                          "default": []
+                        }
+                      },
+                      "required": ["mode"],
+                      "additionalProperties": false
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "network": { "type": "string", "enum": ["off", "restricted", "full"] },
+                        "allowed_domains": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/roles/additionalProperties/properties/description"
+                          },
+                          "maxItems": 256,
+                          "default": []
+                        },
+                        "denied_paths": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/roles/additionalProperties/properties/description"
+                          },
+                          "maxItems": 256,
+                          "default": []
+                        },
+                        "timeout_seconds": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 86400,
+                          "default": 1800
+                        },
+                        "max_artifact_bytes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1073741824,
+                          "default": 10485760
+                        },
+                        "max_output_bytes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1073741824,
+                          "default": 10485760
+                        },
+                        "max_files": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 100000,
+                          "default": 10000
+                        },
+                        "disk_quota_bytes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1099511627776,
+                          "default": 1073741824
+                        }
+                      },
+                      "required": ["network"],
+                      "additionalProperties": false
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "supports_followup": { "type": "boolean" },
+                        "supports_cancel": { "type": "boolean" },
+                        "supports_subagents": { "type": "boolean" },
+                        "supported_workspace_modes": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/workspace/properties/mode"
+                          },
+                          "minItems": 1,
+                          "maxItems": 2
+                        }
+                      },
+                      "required": [
+                        "supports_followup",
+                        "supports_cancel",
+                        "supports_subagents",
+                        "supported_workspace_modes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              { "type": "string" },
+                              { "type": "number" },
+                              { "type": "boolean" },
+                              { "type": "null" }
+                            ]
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/metadata/additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/metadata/additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "protocol_version": {
+                      "$ref": "#/definitions/apply_profile_changeInput/properties/protocol_version"
+                    },
+                    "profile_id": {
+                      "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                    }
+                  },
+                  "required": [
+                    "description",
+                    "dsh",
+                    "delegation",
+                    "workspace",
+                    "policy",
+                    "protocol_version",
+                    "profile_id"
+                  ],
+                  "additionalProperties": false
+                },
+                "set_default_for": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                  },
+                  "maxItems": 256
+                }
+              },
+              "required": ["operation", "profile"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "operation": { "type": "string", "const": "update" },
+                "profile_id": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                },
+                "profile": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile"
+                },
+                "changes": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/description"
+                    },
+                    "dsh": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                        },
+                        "model": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/model"
+                        },
+                        "reasoning_effort": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/reasoning_effort"
+                        },
+                        "agent_preset": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                        },
+                        "max_tokens": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/max_tokens"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "delegation": {
+                      "type": "object",
+                      "properties": {
+                        "max_depth": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/max_depth"
+                        },
+                        "max_children": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/max_children"
+                        },
+                        "roles": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/delegation/properties/roles"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "workspace": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/workspace/properties/mode"
+                        },
+                        "allowed_roots": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/workspace/properties/allowed_roots"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "network": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/network"
+                        },
+                        "allowed_domains": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/allowed_domains"
+                        },
+                        "denied_paths": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/denied_paths"
+                        },
+                        "timeout_seconds": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/timeout_seconds"
+                        },
+                        "max_artifact_bytes": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/max_artifact_bytes"
+                        },
+                        "max_output_bytes": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/max_output_bytes"
+                        },
+                        "max_files": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/max_files"
+                        },
+                        "disk_quota_bytes": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/policy/properties/disk_quota_bytes"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "supports_followup": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/capabilities/properties/supports_followup"
+                        },
+                        "supports_cancel": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/capabilities/properties/supports_cancel"
+                        },
+                        "supports_subagents": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/capabilities/properties/supports_subagents"
+                        },
+                        "supported_workspace_modes": {
+                          "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/capabilities/properties/supported_workspace_modes"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "metadata": {
+                      "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/metadata"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": ["operation", "profile_id"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "operation": { "type": "string", "const": "remove" },
+                "profile_id": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                },
+                "replacement_default_profile_id": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                }
+              },
+              "required": ["operation", "profile_id"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "operation": { "type": "string", "const": "set_default" },
+                "project_id": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                },
+                "profile_id": {
+                  "$ref": "#/definitions/apply_profile_changeInput/properties/change/anyOf/0/properties/profile/properties/dsh/properties/provider"
+                }
+              },
+              "required": ["operation", "project_id", "profile_id"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "expected_revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "required": ["protocol_version", "change", "expected_revision"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

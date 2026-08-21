@@ -6,5 +6,6 @@ export * from './workspace.js';
 export * from './task.js';
 export * from './artifact.js';
 export * from './result.js';
+export * from './setup.js';
 export * from './mcp.js';
 export * from './schema-registry.js';

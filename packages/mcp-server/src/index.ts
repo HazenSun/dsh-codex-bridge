@@ -1,12 +1,25 @@
 import {
+  ApplyProfileChangeInputSchema,
   CancelTaskInputSchema,
   ContinueTaskInputSchema,
   DelegateTaskInputSchema,
+  DiscoverDshModelsInputSchema,
   GetTaskInputSchema,
+  GetSetupStatusInputSchema,
   ListProfilesInputSchema,
+  PreviewProfileChangeInputSchema,
   PROTOCOL_VERSION,
   ReadTaskArtifactInputSchema,
+  RollbackProfileChangeInputSchema,
   WaitTaskInputSchema,
+  type ApplyProfileChangeInput,
+  type DiscoverDshModelsInput,
+  type DshModelCatalog,
+  type PreviewProfileChangeInput,
+  type ProfileChangePreview,
+  type ProfileChangeResult,
+  type RollbackConfigResult,
+  type SetupStatus,
 } from '@dsh-codex-bridge/protocol';
 import type { TaskEngine } from '@dsh-codex-bridge/task-engine';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -17,6 +30,19 @@ export interface BridgeMcpHandle {
   close(): Promise<void>;
 }
 
+export interface BridgeSetupPort {
+  getStatus(): Promise<SetupStatus>;
+  discoverModels(input: DiscoverDshModelsInput): Promise<DshModelCatalog>;
+  previewProfileChange(input: PreviewProfileChangeInput): Promise<ProfileChangePreview>;
+  applyProfileChange(input: ApplyProfileChangeInput): Promise<ProfileChangeResult>;
+  rollbackProfileChange(expectedRevision: string): Promise<RollbackConfigResult>;
+}
+
+export interface BridgeMcpOptions {
+  readonly setup: BridgeSetupPort;
+  readonly engine?: TaskEngine;
+}
+
 function content(value: unknown) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -24,8 +50,98 @@ function content(value: unknown) {
   };
 }
 
-export function createBridgeMcpServer(engine: TaskEngine): McpServer {
-  const server = new McpServer({ name: 'dsh-codex-bridge', version: '0.1.0-alpha.1' });
+export function createBridgeMcpServer(options: BridgeMcpOptions): McpServer {
+  const server = new McpServer(
+    { name: 'dsh-codex-bridge', version: '0.1.0-alpha.2' },
+    {
+      instructions:
+        'Inspect get_setup_status before delegation. When setup is incomplete, discover DSH models, preview any Profile change, and require user approval before apply or rollback. Never request or store provider credentials. When ready, select declared Profiles and treat DSH results as reviewable evidence.',
+    },
+  );
+
+  server.registerTool(
+    'get_setup_status',
+    {
+      title: 'Inspect DSH Bridge setup',
+      description:
+        'Return the current project setup state, redacted checks, configuration revision and safe next actions.',
+      inputSchema: GetSetupStatusInputSchema.shape,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => {
+      GetSetupStatusInputSchema.parse(input);
+      return content(await options.setup.getStatus());
+    },
+  );
+
+  server.registerTool(
+    'discover_dsh_models',
+    {
+      title: 'Discover configured DSH models',
+      description:
+        'List provider and model identifiers exposed by the running DSH profile without credentials or private endpoints.',
+      inputSchema: DiscoverDshModelsInputSchema.shape,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) =>
+      content(await options.setup.discoverModels(DiscoverDshModelsInputSchema.parse(input))),
+  );
+
+  server.registerTool(
+    'preview_profile_change',
+    {
+      title: 'Preview a Bridge Profile change',
+      description:
+        'Validate and preview an add, update, remove or default-Profile change without writing files.',
+      inputSchema: PreviewProfileChangeInputSchema.shape,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => {
+      const parsed = PreviewProfileChangeInputSchema.parse(input);
+      return content(await options.setup.previewProfileChange(parsed));
+    },
+  );
+
+  server.registerTool(
+    'apply_profile_change',
+    {
+      title: 'Apply a Bridge Profile change',
+      description:
+        'Atomically apply a previously reviewable Profile change with optimistic revision protection and a rollback backup.',
+      inputSchema: ApplyProfileChangeInputSchema.shape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input) =>
+      content(await options.setup.applyProfileChange(ApplyProfileChangeInputSchema.parse(input))),
+  );
+
+  server.registerTool(
+    'rollback_profile_change',
+    {
+      title: 'Roll back the latest Bridge configuration change',
+      description:
+        'Restore the newest validated configuration backup when the expected current revision still matches.',
+      inputSchema: RollbackProfileChangeInputSchema.shape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input) => {
+      const parsed = RollbackProfileChangeInputSchema.parse(input);
+      return content(await options.setup.rollbackProfileChange(parsed.expected_revision));
+    },
+  );
+
+  if (options.engine === undefined) return server;
+  const engine = options.engine;
 
   server.registerTool(
     'list_profiles',
@@ -164,8 +280,8 @@ export function createBridgeMcpServer(engine: TaskEngine): McpServer {
   return server;
 }
 
-export async function startStdioBridge(engine: TaskEngine): Promise<BridgeMcpHandle> {
-  const server = createBridgeMcpServer(engine);
+export async function startStdioBridge(options: BridgeMcpOptions): Promise<BridgeMcpHandle> {
+  const server = createBridgeMcpServer(options);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   return {

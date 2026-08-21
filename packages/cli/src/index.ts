@@ -1,19 +1,41 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import {
+  access,
+  copyFile,
+  link,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+} from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { loadBridgeConfig } from '@dsh-codex-bridge/config';
+import { loadBridgeConfig, redactSensitiveText } from '@dsh-codex-bridge/config';
+import {
+  IdentifierSchema,
+  DshModelCatalogSchema,
+  ModelIdSchema,
+  PROTOCOL_VERSION,
+  ProfileSchema,
+  ReasoningEffortSchema,
+  type Profile,
+  type ProfileChange,
+  type DshModelCatalog,
+} from '@dsh-codex-bridge/protocol';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Command } from 'commander';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '0.1.0-alpha.1';
+const VERSION = '0.1.0-alpha.2';
 const DSH_VERSION = '0.1.0-rc.8';
 
 async function run(
@@ -37,7 +59,65 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function configTemplate(projectId: string): string {
+function safeErrorMessage(error: unknown): string {
+  return redactSensitiveText(error instanceof Error ? error.message : String(error));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function atomicWriteText(
+  path: string,
+  content: string,
+  options: { replace: boolean; mode?: number },
+): Promise<void> {
+  const mode = options.mode ?? 0o600;
+  await mkdir(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  const handle = await open(temporaryPath, 'wx', mode);
+  try {
+    await handle.writeFile(content, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  try {
+    if (options.replace) {
+      await rename(temporaryPath, path);
+    } else {
+      await link(temporaryPath, path);
+      await rm(temporaryPath);
+    }
+  } catch (error) {
+    await rm(temporaryPath, { force: true });
+    throw error;
+  }
+}
+
+interface InitialRoute {
+  readonly profileId: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+}
+
+function configTemplate(projectId: string, route: InitialRoute): string {
+  const profileId = IdentifierSchema.parse(route.profileId);
+  const provider = IdentifierSchema.parse(route.provider);
+  const model = ModelIdSchema.parse(route.model);
+  const reasoningEffort =
+    route.reasoningEffort === undefined
+      ? undefined
+      : ReasoningEffortSchema.parse(route.reasoningEffort);
+  const rootReasoning =
+    reasoningEffort === undefined
+      ? ''
+      : `      reasoning_effort: ${JSON.stringify(reasoningEffort)}\n`;
+  const roleReasoning =
+    reasoningEffort === undefined
+      ? ''
+      : `          reasoning_effort: ${JSON.stringify(reasoningEffort)}\n`;
   return `protocol_version: bridge.dsh.dev/v1alpha1
 data_root: .dsh-codex-bridge
 log_level: info
@@ -45,37 +125,33 @@ log_level: info
 projects:
   - project_id: ${projectId}
     root: .
-    default_profile: deepseek-builder
+    default_profile: ${JSON.stringify(profileId)}
 
 profiles:
   - protocol_version: bridge.dsh.dev/v1alpha1
-    profile_id: deepseek-builder
+    profile_id: ${JSON.stringify(profileId)}
     description: Implement focused coding tasks with an isolated workspace and verifiable output.
     dsh:
-      provider: deepseek-official
-      model: deepseek-v4-flash
-      reasoning_effort: high
-      agent_preset: standard
+      provider: ${JSON.stringify(provider)}
+      model: ${JSON.stringify(model)}
+${rootReasoning}      agent_preset: standard
       max_tokens: 32000
     delegation:
       max_depth: 2
       max_children: 3
       roles:
         analysis:
-          provider: deepseek-official
-          model: deepseek-v4-flash
-          reasoning_effort: high
-          description: Explore an independent implementation path or failure hypothesis.
+          provider: ${JSON.stringify(provider)}
+          model: ${JSON.stringify(model)}
+${roleReasoning}          description: Explore an independent implementation path or failure hypothesis.
         tests:
-          provider: deepseek-official
-          model: deepseek-v4-flash
-          reasoning_effort: high
-          description: Verify behavior and identify missing coverage independently.
+          provider: ${JSON.stringify(provider)}
+          model: ${JSON.stringify(model)}
+${roleReasoning}          description: Verify behavior and identify missing coverage independently.
         reviewer:
-          provider: deepseek-official
-          model: deepseek-v4-flash
-          reasoning_effort: high
-          description: Review the proposed change against scope, safety, and acceptance criteria.
+          provider: ${JSON.stringify(provider)}
+          model: ${JSON.stringify(model)}
+${roleReasoning}          description: Review the proposed change against scope, safety, and acceptance criteria.
     workspace:
       mode: isolated_worktree
       allowed_roots: [.]
@@ -105,13 +181,29 @@ sandbox_mode = "read-only"
 async function writeCodexAgent(projectRoot: string): Promise<string> {
   const path = resolve(projectRoot, '.codex', 'agents', 'dsh-orchestrator.toml');
   await mkdir(resolve(projectRoot, '.codex', 'agents'), { recursive: true });
-  await writeFile(path, codexAgentTemplate(), { encoding: 'utf8', mode: 0o600 });
+  const expected = codexAgentTemplate();
+  if (await exists(path)) {
+    const current = await readFile(path, 'utf8');
+    if (current !== expected) {
+      throw new Error(
+        `Refusing to overwrite customized Codex agent ${path}; move or review it explicitly first.`,
+      );
+    }
+    return path;
+  }
+  await atomicWriteText(path, expected, { replace: false });
   return path;
 }
 
 async function initProject(
   path: string,
-  options: { force: boolean; mode: string; dryRun: boolean; codexAgent: boolean },
+  options: {
+    force: boolean;
+    mode: string;
+    dryRun: boolean;
+    codexAgent: boolean;
+    route: InitialRoute;
+  },
 ): Promise<void> {
   const root = await realpath(resolve(path));
   const configPath = resolve(root, 'bridge.yaml');
@@ -145,7 +237,9 @@ async function initProject(
   const projectId = basename(root)
     .toLowerCase()
     .replace(/[^a-z0-9._:-]+/g, '-');
-  await writeFile(configPath, configTemplate(projectId), { encoding: 'utf8', mode: 0o600 });
+  await atomicWriteText(configPath, configTemplate(projectId, options.route), {
+    replace: options.force,
+  });
   await loadBridgeConfig(configPath);
   process.stdout.write(`Created ${configPath}\n`);
   if (includeAgent) process.stdout.write(`Created ${await writeCodexAgent(root)}\n`);
@@ -153,6 +247,28 @@ async function initProject(
 
 function dshHome(): string {
   return resolve(process.env['DSH_HOME'] ?? resolve(homedir(), '.dsh'));
+}
+
+async function writeManagedDshFile(options: {
+  profileRoot: string;
+  backupRoot: string;
+  relativePath: string;
+  content: string;
+  preserveExisting?: boolean;
+}): Promise<'created' | 'updated' | 'unchanged' | 'preserved'> {
+  const target = resolve(options.profileRoot, options.relativePath);
+  if (!(await exists(target))) {
+    await atomicWriteText(target, options.content, { replace: false });
+    return 'created';
+  }
+  const current = await readFile(target, 'utf8');
+  if (current === options.content) return 'unchanged';
+  if (options.preserveExisting === true) return 'preserved';
+  const backup = resolve(options.backupRoot, options.relativePath);
+  await mkdir(dirname(backup), { recursive: true, mode: 0o700 });
+  await copyFile(target, backup, constants.COPYFILE_EXCL);
+  await atomicWriteText(target, options.content, { replace: true });
+  return 'updated';
 }
 
 async function installDshProfile(sourceRoot: string): Promise<string> {
@@ -174,18 +290,54 @@ async function installDshProfile(sourceRoot: string): Promise<string> {
       },
     },
   };
-  await Promise.all([
-    writeFile(resolve(profileRoot, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`),
-    writeFile(resolve(profileRoot, 'cordis.yml'), '[]\n'),
-    writeFile(
-      resolve(profileRoot, 'cordis.patch.yml'),
-      '# User overrides for the DSH Codex Bridge profile.\n[]\n',
-    ),
-    writeFile(
-      resolve(profileRoot, 'pnpm-workspace.yaml'),
-      'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n',
-    ),
+  const packagePath = resolve(profileRoot, 'package.json');
+  if (await exists(packagePath)) {
+    const existing = JSON.parse(await readFile(packagePath, 'utf8')) as { name?: string };
+    if (existing.name !== 'dsh-profile-codex-bridge') {
+      throw new Error(
+        `Refusing to replace non-Bridge DSH profile at ${profileRoot}; choose a different DSH_HOME or move it explicitly.`,
+      );
+    }
+  }
+  const backupRoot = resolve(
+    profileRoot,
+    '.bridge-install-backups',
+    new Date().toISOString().replace(/[:.]/g, '-'),
+  );
+  const writes = await Promise.all([
+    writeManagedDshFile({
+      profileRoot,
+      backupRoot,
+      relativePath: 'package.json',
+      content: `${JSON.stringify(packageJson, null, 2)}\n`,
+    }),
+    writeManagedDshFile({
+      profileRoot,
+      backupRoot,
+      relativePath: 'cordis.yml',
+      content: '[]\n',
+      preserveExisting: true,
+    }),
+    writeManagedDshFile({
+      profileRoot,
+      backupRoot,
+      relativePath: 'cordis.patch.yml',
+      content: '# User overrides for the DSH Codex Bridge profile.\n[]\n',
+      preserveExisting: true,
+    }),
+    writeManagedDshFile({
+      profileRoot,
+      backupRoot,
+      relativePath: 'pnpm-workspace.yaml',
+      content: 'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n',
+    }),
   ]);
+  if (writes.includes('updated')) {
+    process.stdout.write(`Backed up replaced DSH Profile files under ${backupRoot}\n`);
+  }
+  if (writes[1] === 'preserved' || writes[2] === 'preserved') {
+    process.stdout.write(`Preserved existing DSH composition/overrides under ${profileRoot}\n`);
+  }
   await run('pnpm', ['install', '--dir', profileRoot, '--ignore-workspace']);
   const { stdout } = await run('dsh', ['--profile', 'codex-bridge', '--dump-config']);
   if (!stdout.includes('@dsh-codex-bridge/dsh-plugin')) {
@@ -198,7 +350,7 @@ async function installCodexPlugin(sourceRoot: string): Promise<void> {
   try {
     await run('codex', ['plugin', 'marketplace', 'add', sourceRoot]);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorMessage(error);
     if (!/already|exists|configured/i.test(message)) throw error;
   }
   await run('codex', ['plugin', 'add', 'dsh-codex-bridge@dsh-codex-bridge']);
@@ -210,6 +362,7 @@ async function install(options: {
   dsh: boolean;
   mode: string;
   codexAgent: boolean;
+  agentProject?: string;
 }): Promise<void> {
   if (!['direct', 'native-shell'].includes(options.mode)) {
     throw new Error(`Unsupported mode: ${options.mode}`);
@@ -228,8 +381,139 @@ async function install(options: {
     process.stdout.write('Installed Codex plugin. Start a new Codex task to load it.\n');
   }
   if (options.codexAgent || options.mode === 'native-shell') {
-    process.stdout.write(`Created ${await writeCodexAgent(process.cwd())}\n`);
+    process.stdout.write(
+      `Created ${await writeCodexAgent(resolve(options.agentProject ?? process.cwd()))}\n`,
+    );
   }
+}
+
+async function setupProject(options: {
+  project: string;
+  source: string;
+  provider?: string;
+  model?: string;
+  profileId: string;
+  reasoningEffort?: string;
+  codex: boolean;
+  dsh: boolean;
+  mode: string;
+  codexAgent: boolean;
+  dryRun: boolean;
+}): Promise<void> {
+  if ((options.provider === undefined) !== (options.model === undefined)) {
+    throw new Error('--provider and --model must be supplied together.');
+  }
+  const projectRoot = await realpath(resolve(options.project));
+  const configPath = resolve(projectRoot, 'bridge.yaml');
+  const configExists = await exists(configPath);
+  const route =
+    options.provider === undefined || options.model === undefined
+      ? undefined
+      : {
+          profileId: options.profileId,
+          provider: options.provider,
+          model: options.model,
+          ...(options.reasoningEffort === undefined
+            ? {}
+            : { reasoningEffort: options.reasoningEffort }),
+        };
+
+  if (options.dryRun) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          state: configExists || route !== undefined ? 'ready_to_apply' : 'needs_execution_profile',
+          project: projectRoot,
+          config: configPath,
+          install: { codex: options.codex, dsh: options.dsh, mode: options.mode },
+          create_config: !configExists,
+          route: route ?? null,
+          next_actions:
+            configExists || route !== undefined
+              ? ['Run setup without --dry-run after reviewing this plan.']
+              : [
+                  'Configure a Provider in DSH if none exists.',
+                  'Choose an exact Provider/Model returned by DSH.',
+                  'Run setup again with --provider and --model.',
+                ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  if (options.codex || options.dsh) {
+    await install({
+      source: options.source,
+      codex: options.codex,
+      dsh: options.dsh,
+      mode: options.mode,
+      codexAgent: options.codexAgent,
+      agentProject: projectRoot,
+    });
+  }
+
+  if (!configExists) {
+    if (route === undefined) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            state: 'needs_execution_profile',
+            project: projectRoot,
+            config: configPath,
+            next_actions: [
+              'Start a new Codex task and ask: show DSH models available for Bridge setup.',
+              'Rerun setup with the selected --provider and --model.',
+            ],
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
+    await validateInitialRoute(configPath, route);
+    await initProject(projectRoot, {
+      force: false,
+      mode: options.mode,
+      dryRun: false,
+      codexAgent: options.codexAgent,
+      route,
+    });
+  }
+
+  await doctor(configPath);
+}
+
+function assertDiscoveredRoute(catalog: DshModelCatalog, route: InitialRoute): void {
+  const provider = catalog.providers.find((candidate) => candidate.provider === route.provider);
+  if (provider === undefined || !provider.configured) {
+    throw new Error(`DSH Provider is not configured or discoverable: ${route.provider}`);
+  }
+  const model = provider.models.find((candidate) => candidate.model === route.model);
+  if (model === undefined) {
+    throw new Error(`DSH Model is not discoverable for ${route.provider}: ${route.model}`);
+  }
+  if (
+    route.reasoningEffort !== undefined &&
+    model.reasoning_efforts !== undefined &&
+    !model.reasoning_efforts.includes(route.reasoningEffort)
+  ) {
+    throw new Error(
+      `DSH Model ${route.provider}/${route.model} does not advertise reasoning effort ${route.reasoningEffort}`,
+    );
+  }
+}
+
+async function validateInitialRoute(configPath: string, route: InitialRoute): Promise<void> {
+  const output = await callBridgeTool(configPath, 'discover_dsh_models', {
+    protocol_version: PROTOCOL_VERSION,
+    provider: route.provider,
+    include_details: true,
+  });
+  assertDiscoveredRoute(DshModelCatalogSchema.parse(output), route);
 }
 
 async function commandVersion(command: string, args: readonly string[]): Promise<string> {
@@ -276,9 +560,66 @@ async function probeMcp(
       status: 'failed',
       error:
         error instanceof Error
-          ? error.message
-          : stderr.join('').trim() || 'Unknown MCP startup failure',
+          ? safeErrorMessage(error)
+          : redactSensitiveText(stderr.join('').trim()) || 'Unknown MCP startup failure',
     };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+async function callBridgeTool(
+  configPath: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const absoluteConfig = resolve(configPath);
+  const transport = new StdioClientTransport({
+    command: 'dsh',
+    args: ['--profile', 'codex-bridge'],
+    cwd: resolve(absoluteConfig, '..'),
+    env: inheritedEnvironment({
+      DSH_BRIDGE_CONFIG: absoluteConfig,
+      DSH_TELEMETRY_DISABLED: '1',
+    }),
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'dsh-bridge-cli', version: VERSION });
+  try {
+    await client.connect(transport, { timeout: 10_000 });
+    const rawResult: unknown = await client.callTool({ name, arguments: args }, undefined, {
+      timeout: 60_000,
+    });
+    if (!isRecord(rawResult)) throw new Error(`Bridge tool returned an invalid result: ${name}`);
+    const content: unknown = rawResult['content'];
+    if (rawResult['isError'] === true) {
+      const detail = Array.isArray(content)
+        ? (content as unknown[]).find(
+            (block): block is { type: 'text'; text: string } =>
+              isRecord(block) && block['type'] === 'text' && typeof block['text'] === 'string',
+          )?.text
+        : undefined;
+      throw new Error(
+        detail === undefined
+          ? `Bridge tool failed: ${name}`
+          : `${name}: ${redactSensitiveText(detail)}`,
+      );
+    }
+    if (rawResult['structuredContent'] !== undefined) return rawResult['structuredContent'];
+    if (!Array.isArray(content)) {
+      throw new Error(`Bridge tool returned no JSON content: ${name}`);
+    }
+    const text = (content as unknown[]).find(
+      (block): block is { type: 'text'; text: string } =>
+        typeof block === 'object' &&
+        block !== null &&
+        'type' in block &&
+        block.type === 'text' &&
+        'text' in block &&
+        typeof block.text === 'string',
+    );
+    if (text === undefined) throw new Error(`Bridge tool returned no JSON content: ${name}`);
+    return JSON.parse(text.text) as unknown;
   } finally {
     await client.close().catch(() => undefined);
   }
@@ -297,7 +638,7 @@ async function doctor(configPath: string): Promise<void> {
     const { stdout } = await run('dsh', ['--profile', 'codex-bridge', '--dump-config']);
     report['profile'] = stdout.includes('@dsh-codex-bridge/dsh-plugin') ? 'ready' : 'invalid';
   } catch (error) {
-    report['profile'] = error instanceof Error ? error.message : String(error);
+    report['profile'] = safeErrorMessage(error);
   }
   if (await exists(resolve(configPath))) {
     try {
@@ -311,7 +652,7 @@ async function doctor(configPath: string): Promise<void> {
     } catch (error) {
       report['config'] = {
         status: 'invalid',
-        error: error instanceof Error ? error.message : String(error),
+        error: safeErrorMessage(error),
       };
     }
   }
@@ -326,10 +667,110 @@ async function doctor(configPath: string): Promise<void> {
   if (!report['compatible']) process.exitCode = 1;
 }
 
+function profileFromRoute(options: {
+  profileId: string;
+  provider: string;
+  model: string;
+  description: string;
+  reasoningEffort?: string;
+  maxTokens: string;
+  maxChildren: string;
+}): Profile {
+  const maxTokens = Number(options.maxTokens);
+  const maxChildren = Number(options.maxChildren);
+  return ProfileSchema.parse({
+    protocol_version: PROTOCOL_VERSION,
+    profile_id: options.profileId,
+    description: options.description,
+    dsh: {
+      provider: options.provider,
+      model: options.model,
+      ...(options.reasoningEffort === undefined
+        ? {}
+        : { reasoning_effort: options.reasoningEffort }),
+      agent_preset: 'standard',
+      max_tokens: maxTokens,
+    },
+    delegation: {
+      max_depth: maxChildren > 0 ? 2 : 0,
+      max_children: maxChildren,
+      roles: {},
+    },
+    workspace: { mode: 'isolated_worktree', allowed_roots: ['.'] },
+    policy: {
+      network: 'restricted',
+      allowed_domains: [],
+      denied_paths: ['.env', '.git'],
+      timeout_seconds: 1_800,
+      max_artifact_bytes: 10_485_760,
+      max_output_bytes: 1_048_576,
+      max_files: 1_000,
+      disk_quota_bytes: 1_073_741_824,
+    },
+  });
+}
+
+async function changeProfileConfig(options: {
+  config: string;
+  change: ProfileChange;
+  apply: boolean;
+  expectedRevision?: string;
+}): Promise<void> {
+  if (!options.apply) {
+    const preview = await callBridgeTool(options.config, 'preview_profile_change', {
+      protocol_version: PROTOCOL_VERSION,
+      change: options.change,
+    });
+    process.stdout.write(`${JSON.stringify(preview, null, 2)}\n`);
+    return;
+  }
+  if (options.expectedRevision === undefined) {
+    throw new Error('--expected-revision is required with --apply.');
+  }
+  const result = await callBridgeTool(options.config, 'apply_profile_change', {
+    protocol_version: PROTOCOL_VERSION,
+    change: options.change,
+    expected_revision: options.expectedRevision,
+  });
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
 const program = new Command()
   .name('dsh-bridge')
   .description('Install and operate the local-first DSH Codex Bridge')
   .version(VERSION);
+
+program
+  .command('setup')
+  .description('Install the Bridge and guide first-time project/model configuration')
+  .option('--project <path>', 'Git project root to configure', '.')
+  .option('--source <path>', 'Bridge source checkout root', '.')
+  .option('--provider <id>', 'exact Provider ID already configured in DSH')
+  .option('--model <id>', 'exact Model ID exposed by the selected DSH Provider')
+  .option('--profile-id <id>', 'semantic Bridge execution Profile ID', 'dsh-worker')
+  .option('--reasoning-effort <id>', 'reasoning effort advertised by the selected model')
+  .option('--codex', 'install the Codex plugin', true)
+  .option('--no-codex', 'skip Codex plugin installation')
+  .option('--dsh', 'install the DSH profile', true)
+  .option('--no-dsh', 'skip DSH profile installation')
+  .option('--mode <mode>', 'direct or native-shell', 'direct')
+  .option('--codex-agent', 'write the optional dsh_orchestrator agent', false)
+  .option('--dry-run', 'print the installation/configuration plan without writing', false)
+  .action(
+    async (options: {
+      project: string;
+      source: string;
+      provider?: string;
+      model?: string;
+      profileId: string;
+      reasoningEffort?: string;
+      codex: boolean;
+      dsh: boolean;
+      mode: string;
+      codexAgent: boolean;
+      dryRun: boolean;
+    }) => setupProject(options),
+  );
 
 program
   .command('init')
@@ -339,11 +780,42 @@ program
   .option('--mode <mode>', 'direct or native-shell', 'direct')
   .option('--dry-run', 'show planned files without writing', false)
   .option('--codex-agent', 'also create the optional dsh_orchestrator agent', false)
+  .option('--provider <id>', 'exact Provider ID already configured in DSH')
+  .option('--model <id>', 'exact Model ID exposed by the selected DSH Provider')
+  .option('--profile-id <id>', 'semantic Bridge execution Profile ID', 'dsh-worker')
+  .option('--reasoning-effort <id>', 'reasoning effort advertised by the selected model')
   .action(
     async (
       path: string,
-      options: { force: boolean; mode: string; dryRun: boolean; codexAgent: boolean },
-    ) => initProject(path, options),
+      options: {
+        force: boolean;
+        mode: string;
+        dryRun: boolean;
+        codexAgent: boolean;
+        provider?: string;
+        model?: string;
+        profileId: string;
+        reasoningEffort?: string;
+      },
+    ) => {
+      if ((options.provider === undefined) !== (options.model === undefined)) {
+        throw new Error('--provider and --model must be supplied together.');
+      }
+      if (options.provider === undefined || options.model === undefined) {
+        throw new Error(
+          'init requires --provider and --model; use models list or setup instead of a guessed route.',
+        );
+      }
+      const route = {
+        profileId: options.profileId,
+        provider: options.provider,
+        model: options.model,
+        ...(options.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: options.reasoningEffort }),
+      };
+      await initProject(path, { ...options, route });
+    },
   );
 
 program
@@ -406,6 +878,197 @@ profilesCommand
     );
   });
 
+profilesCommand
+  .command('add')
+  .description('Preview or add a semantic execution Profile backed by an existing DSH model')
+  .argument('<profile-id>', 'semantic Profile ID')
+  .requiredOption('--provider <id>', 'exact Provider ID returned by DSH')
+  .requiredOption('--model <id>', 'exact Model ID returned by DSH')
+  .option('--description <text>', 'Profile purpose shown to Codex', 'Focused DSH implementation')
+  .option('--reasoning-effort <id>', 'reasoning effort advertised by the model')
+  .option('--max-tokens <number>', 'per-request token ceiling', '32000')
+  .option('--max-children <number>', 'DSH child Agent ceiling', '0')
+  .option('--set-default-for <project-id...>', 'projects that should use the new Profile')
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .option('--apply', 'write the reviewed change', false)
+  .option('--expected-revision <sha256>', 'revision returned by the preview')
+  .action(
+    async (
+      profileId: string,
+      options: {
+        provider: string;
+        model: string;
+        description: string;
+        reasoningEffort?: string;
+        maxTokens: string;
+        maxChildren: string;
+        setDefaultFor?: string[];
+        config: string;
+        apply: boolean;
+        expectedRevision?: string;
+      },
+    ) => {
+      const profile = profileFromRoute({ profileId, ...options });
+      await changeProfileConfig({
+        config: options.config,
+        change: {
+          operation: 'add',
+          profile,
+          ...(options.setDefaultFor === undefined
+            ? {}
+            : { set_default_for: options.setDefaultFor }),
+        },
+        apply: options.apply,
+        ...(options.expectedRevision === undefined
+          ? {}
+          : { expectedRevision: options.expectedRevision }),
+      });
+    },
+  );
+
+profilesCommand
+  .command('update')
+  .description('Preview or update the DSH route and budget of an existing Profile')
+  .argument('<profile-id>', 'existing Profile ID')
+  .option('--provider <id>', 'exact Provider ID returned by DSH')
+  .option('--model <id>', 'exact Model ID returned by DSH')
+  .option('--reasoning-effort <id>', 'reasoning effort advertised by the model')
+  .option('--max-tokens <number>', 'per-request token ceiling')
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .option('--apply', 'write the reviewed change', false)
+  .option('--expected-revision <sha256>', 'revision returned by the preview')
+  .action(
+    async (
+      profileId: string,
+      options: {
+        provider?: string;
+        model?: string;
+        reasoningEffort?: string;
+        maxTokens?: string;
+        config: string;
+        apply: boolean;
+        expectedRevision?: string;
+      },
+    ) => {
+      if ((options.provider === undefined) !== (options.model === undefined)) {
+        throw new Error('--provider and --model must be supplied together.');
+      }
+      const dsh = {
+        ...(options.provider === undefined ? {} : { provider: options.provider }),
+        ...(options.model === undefined ? {} : { model: options.model }),
+        ...(options.reasoningEffort === undefined
+          ? {}
+          : { reasoning_effort: options.reasoningEffort }),
+        ...(options.maxTokens === undefined ? {} : { max_tokens: Number(options.maxTokens) }),
+      };
+      if (Object.keys(dsh).length === 0) throw new Error('No Profile changes were requested.');
+      await changeProfileConfig({
+        config: options.config,
+        change: { operation: 'update', profile_id: profileId, changes: { dsh } },
+        apply: options.apply,
+        ...(options.expectedRevision === undefined
+          ? {}
+          : { expectedRevision: options.expectedRevision }),
+      });
+    },
+  );
+
+profilesCommand
+  .command('set-default')
+  .description('Preview or set the default Profile for one project')
+  .argument('<profile-id>', 'existing Profile ID')
+  .requiredOption('--project-id <id>', 'project whose default should change')
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .option('--apply', 'write the reviewed change', false)
+  .option('--expected-revision <sha256>', 'revision returned by the preview')
+  .action(
+    async (
+      profileId: string,
+      options: {
+        projectId: string;
+        config: string;
+        apply: boolean;
+        expectedRevision?: string;
+      },
+    ) =>
+      changeProfileConfig({
+        config: options.config,
+        change: {
+          operation: 'set_default',
+          project_id: options.projectId,
+          profile_id: profileId,
+        },
+        apply: options.apply,
+        ...(options.expectedRevision === undefined
+          ? {}
+          : { expectedRevision: options.expectedRevision }),
+      }),
+  );
+
+profilesCommand
+  .command('remove')
+  .description('Preview or remove a Profile with an explicit replacement when required')
+  .argument('<profile-id>', 'Profile ID to remove')
+  .option('--replacement <profile-id>', 'replacement for projects using this Profile')
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .option('--apply', 'write the reviewed change', false)
+  .option('--expected-revision <sha256>', 'revision returned by the preview')
+  .action(
+    async (
+      profileId: string,
+      options: {
+        replacement?: string;
+        config: string;
+        apply: boolean;
+        expectedRevision?: string;
+      },
+    ) =>
+      changeProfileConfig({
+        config: options.config,
+        change: {
+          operation: 'remove',
+          profile_id: profileId,
+          ...(options.replacement === undefined
+            ? {}
+            : { replacement_default_profile_id: options.replacement }),
+        },
+        apply: options.apply,
+        ...(options.expectedRevision === undefined
+          ? {}
+          : { expectedRevision: options.expectedRevision }),
+      }),
+  );
+
+profilesCommand
+  .command('rollback')
+  .description('Roll back the latest configuration backup with revision protection')
+  .requiredOption('--expected-revision <sha256>', 'current configuration revision')
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .action(async (options: { expectedRevision: string; config: string }) => {
+    const result = await callBridgeTool(options.config, 'rollback_profile_change', {
+      protocol_version: PROTOCOL_VERSION,
+      expected_revision: options.expectedRevision,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+const modelsCommand = program.command('models').description('Discover model routes from DSH');
+
+modelsCommand
+  .command('list')
+  .description('List live DSH Providers and their advertised models without credentials')
+  .option('--provider <id>', 'limit discovery to one Provider ID')
+  .option('--details', 'resolve reasoning and capacity details for each model', false)
+  .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
+  .action(async (options: { provider?: string; details: boolean; config: string }) => {
+    const result = await callBridgeTool(options.config, 'discover_dsh_models', {
+      protocol_version: PROTOCOL_VERSION,
+      ...(options.provider === undefined ? {} : { provider: options.provider }),
+      include_details: options.details,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
 const configCommand = program.command('config').description('Inspect effective configuration');
 
 configCommand
@@ -416,10 +1079,16 @@ configCommand
   .option('--redacted', 'omit sensitive values (always enabled)', true)
   .action(async (options: { config: string }) => {
     const config = await loadBridgeConfig(options.config);
-    process.stdout.write(`${JSON.stringify(config.value, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        config.value,
+        (key, value: unknown) => (key === 'metadata' ? undefined : value),
+        2,
+      )}\n`,
+    );
   });
 
 await program.parseAsync(process.argv).catch((error: unknown) => {
-  process.stderr.write(`dsh-bridge: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`dsh-bridge: ${safeErrorMessage(error)}\n`);
   process.exitCode = 1;
 });

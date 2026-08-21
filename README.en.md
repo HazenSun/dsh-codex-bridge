@@ -8,7 +8,7 @@ DSH Codex Bridge is local-first agent infrastructure. Codex decides what to dele
 
 ## Status
 
-- Version: `0.1.0-alpha.1`
+- Version: `0.1.0-alpha.2`
 - DSH compatibility baseline: `0.1.0-rc.8`
 - Distribution: source install only
 - Verified: macOS arm64 with real Kimi 2.7 Code and DeepSeek V4 Flash provider calls
@@ -16,7 +16,7 @@ DSH Codex Bridge is local-first agent infrastructure. Codex decides what to dele
 
 This project does not turn DSH into a native Codex model. Direct Mode exposes DSH as an external worker over local STDIO MCP. Native Shell Mode optionally adds a narrow Codex orchestration agent for thread visibility.
 
-## Quickstart
+## Three-minute source setup
 
 Prerequisites: Node.js `22.19+` or `24+`, pnpm, Git, DSH `0.1.0-rc.8`, Codex CLI/Desktop, and a provider already configured in DSH.
 
@@ -28,18 +28,54 @@ pnpm install --frozen-lockfile
 pnpm build
 
 BRIDGE_PROJECT=/absolute/path/to/your-git-project
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct
-pnpm dsh-bridge install --source . --codex --dsh --mode direct
-pnpm dsh-bridge doctor --config "$BRIDGE_PROJECT/bridge.yaml" --json --redacted
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source . --dry-run
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source .
 ```
 
-Open a new Codex task and say:
+The second command installs the DSH Profile and Codex Plugin. When no execution Profile has been selected, it stops safely at `needs_execution_profile` instead of guessing a model. Open a new Codex task and say:
+
+```text
+Set up DSH Bridge for this project. Preview every configuration change before writing.
+```
+
+Codex discovers live DSH Provider/Model IDs and proposes a semantic Bridge Profile. For the first file it shows the exact `setup` plan before execution; after `bridge.yaml` exists, every Profile write uses a semantic diff and explicit approval. Provider credentials remain in DSH.
+
+After setup, say:
 
 ```text
 Use DSH for this task and decide whether a single or multi-agent run is appropriate.
 ```
 
 Codex discovers eligible Profiles, records its routing decision, delegates into an isolated worktree, and reviews the returned patch and runtime evidence.
+
+## Manage models from Codex
+
+Adding the Provider/Model to DSH supplies the low-level model support. To make it safely routable from Codex, map it to a named Bridge Profile. Example prompts:
+
+```text
+Show the DSH models available to this project.
+Add kimi-k2.7-code as a fast-code Profile. Preview only.
+Make deepseek-v4-flash the default after I approve the diff.
+Roll back the latest Bridge model configuration change.
+```
+
+Every write uses a reviewed preview, an expected SHA-256 configuration revision, an atomic `0600` write, and a bounded rollback backup. CLI equivalents:
+
+```bash
+pnpm dsh-bridge models list --config "$BRIDGE_PROJECT/bridge.yaml" --details
+pnpm dsh-bridge profiles add fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <provider-id> --model <model-id>
+# Review before_revision, then repeat with:
+# --apply --expected-revision <before_revision>
+
+pnpm dsh-bridge profiles update fast-code \
+  --config "$BRIDGE_PROJECT/bridge.yaml" \
+  --provider <provider-id> --model <new-model-id>
+# Preview first; repeat with --apply and its exact before_revision.
+```
+
+Configuration changes affect subsequent tasks. Start a new Codex task when the tool returns `restart_required: true`.
 
 ## What is implemented
 
@@ -53,6 +89,7 @@ Codex discovers eligible Profiles, records its routing decision, delegates into 
 - SHA-256 content addressing, pagination, and redaction
 - durable JSON task records with startup reconciliation
 - CLI initialization, installation, profile inspection, and doctor
+- guided first-use setup and revision-protected Profile changes
 
 ## Verification
 
@@ -60,6 +97,7 @@ Codex discovers eligible Profiles, records its routing decision, delegates into 
 pnpm verify
 pnpm test:e2e:dsh
 pnpm test:e2e:model-matrix
+pnpm test:e2e:setup
 ```
 
 The credentialed E2E suites use temporary Git fixtures and real configured providers. Redacted retained evidence is under [`tests/e2e/evidence`](tests/e2e/evidence/).

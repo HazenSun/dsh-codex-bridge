@@ -15,7 +15,7 @@ Record a concise rationale and any requested roles in the delegation request. Ne
 
 ## Before delegation
 
-1. Confirm the project contains a valid `bridge.yaml`.
+1. Call `get_setup_status`. If setup is not `ready`, follow the bundled `setup-dsh-bridge` workflow instead of returning a generic missing-configuration error.
 2. Call `list_profiles` and select profiles by their descriptions and declared limits. Never invent a profile or expose provider credentials.
 3. Delegate only a bounded objective with observable acceptance criteria. Keep strategic decisions, secret handling, deployment, merge and destructive operations in Codex.
 4. Prefer Direct Mode. Spawn the optional `dsh_orchestrator` Codex agent only when the user explicitly wants a native Sub-Agent thread.

@@ -4,7 +4,7 @@
 
 > **状态说明**
 >
-> 当前版本为 `0.1.0-alpha.1`，源码安装、CLI 初始化、DSH Profile/Codex Plugin 安装和真实 DSH `0.1.0-rc.8` 闭环均可运行。npm 包和 Marketplace 公共发布尚未进行。
+> 当前版本为 `0.1.0-alpha.2`，源码安装、CLI 初始化、DSH Profile/Codex Plugin 安装和真实 DSH `0.1.0-rc.8` 闭环均可运行。npm 包和 Marketplace 公共发布尚未进行。
 
 ## 1. 你将得到什么
 
@@ -72,20 +72,23 @@ pnpm dsh-bridge doctor --json --redacted
 
 npm 包和 Codex Plugin Marketplace 包尚未发布。当前不要执行未经 Release Notes 确认的全局安装命令；正式发布后，包名、审核状态、Node 运行时和 DSH 版本约束会以对应 Release Notes 为准。
 
-## 5. 一键初始化与安装
+## 5. 一键安装与首次设置
 
-CLI 支持源码环境下的一键初始化和安装：重复执行不会覆盖已有 `bridge.yaml`（除非显式使用 `--force`），也不会覆盖 Provider 密钥或项目源码；写入前可用 `--dry-run` 查看计划。
+`setup` 是推荐入口。它先安装两端插件；未选择模型时停在可恢复的设置状态，不会猜测 Provider/Model，也不会覆盖 Provider 密钥或项目源码：
 
 ```bash
 BRIDGE_PROJECT=/absolute/path/to/your-project
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct --dry-run
-pnpm dsh-bridge init "$BRIDGE_PROJECT" --mode direct
-pnpm dsh-bridge install --source . --codex --dsh --mode direct
-pnpm dsh-bridge doctor --config "$BRIDGE_PROJECT/bridge.yaml" --json --redacted
-pnpm dsh-bridge profiles validate --config "$BRIDGE_PROJECT/bridge.yaml"
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source . --dry-run
+pnpm dsh-bridge setup --project "$BRIDGE_PROJECT" --source .
 ```
 
-`init` 会在 Git 项目创建并校验 `bridge.yaml`；`install` 会从当前源码 checkout 安装 DSH `codex-bridge` Profile 和 Codex Plugin。`--codex-agent` 或 `--mode native-shell` 会额外生成项目级 `dsh_orchestrator` Agent。
+新建 Codex 任务并说：
+
+```text
+帮我完成 DSH Bridge 初次设置。所有配置先预览，确认后再写入。
+```
+
+Codex 会读取 DSH 的实时模型目录、建议语义化 Profile。首次文件创建前展示精确 `setup` 计划，后续 Profile 写入前展示语义 Diff。DSH 没有 Provider 时必须先在 DSH Settings 中完成凭据设置；不要把密钥粘贴给 Codex。
 
 安装流程的职责：
 
@@ -94,9 +97,18 @@ pnpm dsh-bridge profiles validate --config "$BRIDGE_PROJECT/bridge.yaml"
 3. 注册仓库内 Marketplace 与本地 STDIO MCP Server；
 4. 安装并启用 Codex Skill；
 5. 仅在显式指定时生成 `dsh_orchestrator` Native Shell Agent；
-6. 打印已安装的 Profile 和插件状态。
+6. 缺少 `bridge.yaml` 时仍启动设置工具，返回明确下一步；
+7. 打印已安装的 Profile 和插件状态。
 
-一键安装不会替用户选择第三方模型、上传密钥、修改主分支或打开不受限网络权限。
+一键安装不会替用户猜测第三方模型、上传密钥、修改主分支或打开不受限网络权限。需要纯 CLI 设置时：
+
+```bash
+pnpm dsh-bridge models list --config "$BRIDGE_PROJECT/bridge.yaml" --details
+pnpm dsh-bridge setup \
+  --project "$BRIDGE_PROJECT" --source . \
+  --provider <provider-id> --model <model-id> \
+  --profile-id default-code
+```
 
 ## 6. 连接检查
 
@@ -123,6 +135,19 @@ pnpm dsh-bridge config show --config "$BRIDGE_PROJECT/bridge.yaml" --effective -
 Provider 凭据和模型可调用性由 `pnpm test:e2e:dsh` 的真实请求验证；`doctor` 不触发付费模型调用。
 
 若 `doctor` 失败，先保留脱敏后的 JSON 输出，再参照 [故障排查](troubleshooting.md)。
+
+### 后续通过 Codex 修改模型
+
+先在 DSH 中加入模型，再让 Codex 将该路由映射成 Bridge Profile。Bridge 无需为每个新模型发版。
+
+```text
+显示 DSH 当前可用模型。
+把 kimi-k2.7-code 添加成 fast-code Profile，先预览。
+把 deepseek-v4-flash 设为默认模型，确认后再写入。
+回滚上一次 Bridge 模型配置。
+```
+
+配置写入需要预览返回的 SHA-256 Revision；并发修改会失败而不是覆盖。成功写入后若返回 `restart_required: true`，新建 Codex 任务再使用新 Profile。
 
 ## 7. 第一个 Direct Mode 任务
 

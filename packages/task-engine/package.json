@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/task-engine",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Recoverable asynchronous task orchestration for DSH Codex Bridge.",
   "repository": {
     "type": "git",

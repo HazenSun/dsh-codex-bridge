@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/config",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Validated project and profile configuration for DSH Codex Bridge.",
   "repository": {
     "type": "git",

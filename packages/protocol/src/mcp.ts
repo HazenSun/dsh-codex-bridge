@@ -34,6 +34,67 @@ import {
   type TaskOperationReceipt,
 } from './task.js';
 import { GetTaskResultOutputSchema, type GetTaskResultOutput } from './result.js';
+import {
+  ConfigRevisionSchema,
+  DshModelCatalogSchema,
+  ProfileChangePreviewSchema,
+  ProfileChangeResultSchema,
+  ProfileChangeSchema,
+  RollbackConfigResultSchema,
+  SetupStatusSchema,
+  type DshModelCatalog,
+  type ProfileChangePreview,
+  type ProfileChangeResult,
+  type RollbackConfigResult,
+  type SetupStatus,
+} from './setup.js';
+
+export const GetSetupStatusInputSchema = z
+  .object({
+    protocol_version: ProtocolVersionSchema,
+  })
+  .strict();
+export type GetSetupStatusInput = z.infer<typeof GetSetupStatusInputSchema>;
+export const GetSetupStatusOutputSchema = SetupStatusSchema;
+export type GetSetupStatusOutput = SetupStatus;
+
+export const DiscoverDshModelsInputSchema = z
+  .object({
+    protocol_version: ProtocolVersionSchema,
+    provider: IdentifierSchema.optional(),
+    include_details: z.boolean().optional(),
+  })
+  .strict();
+export type DiscoverDshModelsInput = z.infer<typeof DiscoverDshModelsInputSchema>;
+export const DiscoverDshModelsOutputSchema = DshModelCatalogSchema;
+export type DiscoverDshModelsOutput = DshModelCatalog;
+
+export const PreviewProfileChangeInputSchema = z
+  .object({
+    protocol_version: ProtocolVersionSchema,
+    change: ProfileChangeSchema,
+  })
+  .strict();
+export type PreviewProfileChangeInput = z.infer<typeof PreviewProfileChangeInputSchema>;
+export const PreviewProfileChangeOutputSchema = ProfileChangePreviewSchema;
+export type PreviewProfileChangeOutput = ProfileChangePreview;
+
+export const ApplyProfileChangeInputSchema = PreviewProfileChangeInputSchema.extend({
+  expected_revision: ConfigRevisionSchema,
+}).strict();
+export type ApplyProfileChangeInput = z.infer<typeof ApplyProfileChangeInputSchema>;
+export const ApplyProfileChangeOutputSchema = ProfileChangeResultSchema;
+export type ApplyProfileChangeOutput = ProfileChangeResult;
+
+export const RollbackProfileChangeInputSchema = z
+  .object({
+    protocol_version: ProtocolVersionSchema,
+    expected_revision: ConfigRevisionSchema,
+  })
+  .strict();
+export type RollbackProfileChangeInput = z.infer<typeof RollbackProfileChangeInputSchema>;
+export const RollbackProfileChangeOutputSchema = RollbackConfigResultSchema;
+export type RollbackProfileChangeOutput = RollbackConfigResult;
 
 export const ListProfilesInputSchema = z
   .object({
@@ -136,6 +197,26 @@ export type DoctorOutput = z.infer<typeof DoctorOutputSchema>;
  * without inventing a second source of truth for request/response validation.
  */
 export const MCP_TOOL_SCHEMAS = {
+  get_setup_status: {
+    input: GetSetupStatusInputSchema,
+    output: GetSetupStatusOutputSchema,
+  },
+  discover_dsh_models: {
+    input: DiscoverDshModelsInputSchema,
+    output: DiscoverDshModelsOutputSchema,
+  },
+  preview_profile_change: {
+    input: PreviewProfileChangeInputSchema,
+    output: PreviewProfileChangeOutputSchema,
+  },
+  apply_profile_change: {
+    input: ApplyProfileChangeInputSchema,
+    output: ApplyProfileChangeOutputSchema,
+  },
+  rollback_profile_change: {
+    input: RollbackProfileChangeInputSchema,
+    output: RollbackProfileChangeOutputSchema,
+  },
   list_profiles: {
     input: ListProfilesInputSchema,
     output: ListProfilesOutputSchema,
@@ -181,6 +262,11 @@ export const MCP_TOOL_SCHEMAS = {
 export type McpToolName = keyof typeof MCP_TOOL_SCHEMAS;
 
 export type McpToolInputMap = {
+  get_setup_status: GetSetupStatusInput;
+  discover_dsh_models: DiscoverDshModelsInput;
+  preview_profile_change: PreviewProfileChangeInput;
+  apply_profile_change: ApplyProfileChangeInput;
+  rollback_profile_change: RollbackProfileChangeInput;
   list_profiles: ListProfilesInput;
   delegate_task: DelegateTaskInput;
   get_task: GetTaskInput;
@@ -194,6 +280,11 @@ export type McpToolInputMap = {
 };
 
 export type McpToolOutputMap = {
+  get_setup_status: GetSetupStatusOutput;
+  discover_dsh_models: DiscoverDshModelsOutput;
+  preview_profile_change: PreviewProfileChangeOutput;
+  apply_profile_change: ApplyProfileChangeOutput;
+  rollback_profile_change: RollbackProfileChangeOutput;
   list_profiles: ListProfilesOutput;
   delegate_task: DelegateTaskOutput;
   get_task: GetTaskOutput;

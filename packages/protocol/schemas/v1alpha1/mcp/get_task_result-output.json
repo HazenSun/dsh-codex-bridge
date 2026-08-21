@@ -4,10 +4,7 @@
     "get_task_resultOutput": {
       "type": "object",
       "properties": {
-        "protocol_version": {
-          "type": "string",
-          "const": "bridge.dsh.dev/v1alpha1"
-        },
+        "protocol_version": { "type": "string", "const": "bridge.dsh.dev/v1alpha1" },
         "result": {
           "type": "object",
           "properties": {
@@ -33,24 +30,14 @@
               "type": "string",
               "enum": ["completed", "partial", "cancelled", "timed_out", "interrupted", "failed"]
             },
-            "summary": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100000
-            },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 100000 },
             "acceptance": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
-                  "criterion": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "passed": {
-                    "type": "boolean"
-                  },
+                  "criterion": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                  "passed": { "type": "boolean" },
                   "evidence": {
                     "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/acceptance/items/properties/criterion"
                   }
@@ -65,11 +52,7 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "path": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
+                  "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -82,21 +65,12 @@
                       "untracked"
                     ]
                   },
-                  "additions": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
+                  "additions": { "type": "integer", "minimum": 0 },
                   "deletions": {
                     "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
                   },
-                  "binary": {
-                    "type": "boolean"
-                  },
-                  "previous_path": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  }
+                  "binary": { "type": "boolean" },
+                  "previous_path": { "type": "string", "minLength": 1, "maxLength": 4096 }
                 },
                 "required": ["path", "status", "additions", "deletions", "binary"],
                 "additionalProperties": false
@@ -204,26 +178,13 @@
                         "maxLength": 255,
                         "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*\\/[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*(?:;.*)?$"
                       },
-                      "encoding": {
-                        "type": "string",
-                        "enum": ["utf8", "base64"]
-                      },
+                      "encoding": { "type": "string", "enum": ["utf8", "base64"] },
                       "bytes": {
                         "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
                       },
-                      "sha256": {
-                        "type": "string",
-                        "pattern": "^[a-f0-9]{64}$"
-                      },
-                      "uri": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 2048
-                      },
-                      "created_at": {
-                        "type": "string",
-                        "format": "date-time"
-                      }
+                      "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                      "uri": { "type": "string", "minLength": 1, "maxLength": 2048 },
+                      "created_at": { "type": "string", "format": "date-time" }
                     },
                     "required": [
                       "artifact_id",
@@ -251,19 +212,9 @@
             "delegation_decision": {
               "type": "object",
               "properties": {
-                "strategy": {
-                  "type": "string",
-                  "enum": ["auto", "single", "multi"]
-                },
-                "resolved_strategy": {
-                  "type": "string",
-                  "enum": ["single", "multi"]
-                },
-                "reason": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100000
-                },
+                "strategy": { "type": "string", "enum": ["auto", "single", "multi"] },
+                "resolved_strategy": { "type": "string", "enum": ["single", "multi"] },
+                "reason": { "type": "string", "minLength": 1, "maxLength": 100000 },
                 "roles": {
                   "type": "array",
                   "items": {
@@ -271,10 +222,7 @@
                   },
                   "maxItems": 32
                 },
-                "decided_by": {
-                  "type": "string",
-                  "enum": ["codex", "bridge", "dsh"]
-                },
+                "decided_by": { "type": "string", "enum": ["codex", "bridge", "dsh"] },
                 "decided_at": {
                   "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/artifacts/properties/artifacts/items/properties/created_at"
                 }
@@ -292,16 +240,8 @@
             "delegation_evidence": {
               "type": "object",
               "properties": {
-                "children_requested": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 128
-                },
-                "children_completed": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 128
-                },
+                "children_requested": { "type": "integer", "minimum": 0, "maximum": 128 },
+                "children_completed": { "type": "integer", "minimum": 0, "maximum": 128 },
                 "children_failed": {
                   "type": "integer",
                   "minimum": 0,
@@ -323,11 +263,7 @@
                 "observed": {
                   "type": "object",
                   "properties": {
-                    "subagent_calls": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 128
-                    },
+                    "subagent_calls": { "type": "integer", "minimum": 0, "maximum": 128 },
                     "tool_names": {
                       "type": "array",
                       "items": {
@@ -364,10 +300,7 @@
                 "total_tokens": {
                   "$ref": "#/definitions/get_task_resultOutput/properties/result/properties/changed_files/items/properties/additions"
                 },
-                "cost_usd": {
-                  "type": "number",
-                  "minimum": 0
-                },
+                "cost_usd": { "type": "number", "minimum": 0 },
                 "providers": {
                   "type": "array",
                   "items": {
@@ -446,32 +379,18 @@
                     "INTERNAL_ERROR"
                   ]
                 },
-                "message": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 4096
-                },
-                "retryable": {
-                  "type": "boolean"
-                },
+                "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                "retryable": { "type": "boolean" },
                 "details": {
                   "type": "object",
                   "additionalProperties": {
                     "anyOf": [
                       {
                         "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "null"
-                          }
+                          { "type": "string" },
+                          { "type": "number" },
+                          { "type": "boolean" },
+                          { "type": "null" }
                         ]
                       },
                       {

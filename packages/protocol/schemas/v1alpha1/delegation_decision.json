@@ -4,19 +4,9 @@
     "delegation_decision": {
       "type": "object",
       "properties": {
-        "strategy": {
-          "type": "string",
-          "enum": ["auto", "single", "multi"]
-        },
-        "resolved_strategy": {
-          "type": "string",
-          "enum": ["single", "multi"]
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100000
-        },
+        "strategy": { "type": "string", "enum": ["auto", "single", "multi"] },
+        "resolved_strategy": { "type": "string", "enum": ["single", "multi"] },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 100000 },
         "roles": {
           "type": "array",
           "items": {
@@ -27,14 +17,8 @@
           },
           "maxItems": 32
         },
-        "decided_by": {
-          "type": "string",
-          "enum": ["codex", "bridge", "dsh"]
-        },
-        "decided_at": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "decided_by": { "type": "string", "enum": ["codex", "bridge", "dsh"] },
+        "decided_at": { "type": "string", "format": "date-time" }
       },
       "required": ["strategy", "resolved_strategy", "reason", "roles", "decided_by", "decided_at"],
       "additionalProperties": false

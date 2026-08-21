@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Set up DSH Bridge'
+  short_description: 'Configure DSH models and Bridge Profiles safely'
+  default_prompt: 'Set up DSH Bridge for this project.'
