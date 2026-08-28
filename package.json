@@ -50,15 +50,15 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7",
-    "@eslint/js": "^9.34.0",
+    "@changesets/cli": "^3.0.1",
+    "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^24.3.0",
-    "eslint": "^9.34.0",
+    "@types/node": "^26.3.0",
+    "eslint": "^10.9.1",
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
-    "typescript": "^5.9.2",
-    "typescript-eslint": "^8.41.0",
-    "vitest": "^3.2.4"
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
   }
 }
