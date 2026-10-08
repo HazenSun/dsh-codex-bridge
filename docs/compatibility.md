@@ -19,6 +19,8 @@ Kimi remains configurable, but was **not credentialed or called in the Alpha 3 r
 
 The installer registers local MCP using explicit paths through `codex mcp add`; the Skill plugin is separate. The tested legacy plugin JSON did not expand `${PLUGIN_ROOT}` / `${CODEX_HOME}` or forward `env_vars`. The release does not rely on those behaviors. Dependency audit of the source lockfile reported zero advisories on the verification date; this does not audit DSH's independently installed dependency tree or establish sandbox security.
 
+Public Linux CI verified Node `22.19.0` and `24`, frozen installation, all automated checks, dependency audit, the exact DSH Profile contract and publication contents on source commit `4f2d626`: [CI run](https://github.com/HazenSun/dsh-codex-bridge/actions/runs/37782957112). [CodeQL](https://github.com/HazenSun/dsh-codex-bridge/actions/runs/37782957175) completed successfully on the same commit. Credentialed model tests were local, not executed on untrusted pull requests.
+
 ## Historical evidence
 
 The following results apply to their recorded versions only. They do not certify DSH `0.2.0-rc.2`, models returned by a newer directory, or another machine.
