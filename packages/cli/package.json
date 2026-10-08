@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/cli",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Install, initialize and diagnose DSH Codex Bridge.",
   "repository": {
     "type": "git",
@@ -32,12 +32,14 @@
   "dependencies": {
     "@dsh-codex-bridge/config": "workspace:*",
     "@dsh-codex-bridge/protocol": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "commander": "^14.0.0"
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "commander": "^14.0.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.11"
   }
 }

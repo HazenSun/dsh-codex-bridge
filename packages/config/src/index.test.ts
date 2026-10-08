@@ -129,6 +129,27 @@ describe('BridgeConfig', () => {
 });
 
 describe('configuration control plane', () => {
+  it('clears an old reasoning effort without replacing unrelated Profile fields', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-bridge-control-'));
+    const configPath = await writeEditableConfig(root);
+    const snapshot = await readConfigSnapshot(configPath);
+    const result = await applyProfileChange(
+      configPath,
+      { operation: 'update', profile_id: 'builder', changes: {}, clear_reasoning_effort: true },
+      { expectedRevision: snapshot.revision },
+    );
+    const updated = await readConfigSnapshot(configPath);
+    const original = snapshot.config.profiles.find(
+      (candidate) => candidate.profile_id === 'builder',
+    );
+    const changed = updated.config.profiles.find((candidate) => candidate.profile_id === 'builder');
+    expect(changed?.dsh.reasoning_effort).toBeUndefined();
+    expect(changed?.dsh.max_tokens).toBe(original?.dsh.max_tokens);
+    expect(changed?.policy).toEqual(original?.policy);
+    expect(result.preview.diff).toHaveLength(1);
+    expect(result.preview.diff[0]?.kind).toBe('removed');
+  });
+
   it('computes a stable SHA-256 revision and previews without writing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-bridge-control-'));
     const configPath = await writeEditableConfig(root);

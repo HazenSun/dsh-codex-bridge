@@ -2,14 +2,14 @@
 
 感谢参与。这个项目的核心难点不是再包一层命令，而是把 Codex 的委派体验、DSH 的 Agent Runtime、MCP 协议、Worktree 隔离和可复核证据做成一个可以长期维护的开源系统。
 
-项目目前处于 `0.1.0-alpha.2` 源码可用阶段。提交代码前，请先确认改动属于当前里程碑，并阅读 [架构规划](docs/architecture.md)、[施工规划](docs/implementation-plan.md) 和 [安全模型](docs/security.md)。
+项目目前处于 `0.1.0-alpha.3` 源码可用阶段。提交代码前，请先确认改动属于当前里程碑，并阅读 [架构规划](docs/architecture.md) 和 [安全模型](docs/security.md)。私有施工规划、机器配置和本次执行收据必须保存在仓库外。
 
 ## 1. 贡献范围
 
 欢迎：
 
 - Protocol Schema、错误码和状态机的改进；
-- DSH `0.1.0-rc.8` Adapter、生命周期和 Contract Test；
+- DSH `0.2.0-rc.2` Adapter、Session V4 生命周期和 Contract Test；
 - MCP 工具、CLI、Codex Plugin 和 DSH Plugin 的纵向闭环；
 - Worktree、Artifact、恢复、取消和资源限制；
 - 安全测试、故障注入、性能基准和跨平台修复；
@@ -30,7 +30,7 @@
 - Node.js `22.19+` 或 `24+`；
 - pnpm；
 - Git；
-- DSH `0.1.0-rc.8`（仅在 DSH Adapter、集成和 E2E 测试中需要）；
+- DSH `0.2.0-rc.2`（仅在 DSH Adapter、集成和 E2E 测试中需要）；
 - Codex CLI/Desktop（验证 Codex Plugin/MCP 时需要）。
 
 ### 获取源码

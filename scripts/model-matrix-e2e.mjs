@@ -1,61 +1,64 @@
-import { execFile } from 'node:child_process';
-import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { promisify } from 'node:util';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-const execFileAsync = promisify(execFile);
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+import {
+  BRIDGE_VERSION,
+  DSH_VERSION,
+  discoverRoutes,
+  environment,
+  evidenceDirectory,
+  execFileAsync,
+  readPatch,
+  readRuntime,
+  requestedRoutes,
+  routeMatches,
+  savedSession,
+  structured,
+  verifyConnection,
+  waitTerminal,
+  worktreeProof,
+  writeEvidence,
+} from './e2e-support.mjs';
+
 const fixture = await mkdtemp(join(tmpdir(), 'dsh-model-matrix-'));
-const evidencePath = resolve(
-  process.env.DSH_BRIDGE_EVIDENCE_DIR ?? resolve(root, 'tests/e2e/evidence'),
-  'model-matrix.json',
-);
+const evidenceDir = await evidenceDirectory('dsh-model-matrix');
+const routes = requestedRoutes();
 const stderrLines = [];
-
-function environment(overrides) {
-  return Object.fromEntries([
-    ...Object.entries(process.env).filter((entry) => typeof entry[1] === 'string'),
-    ...Object.entries(overrides),
-  ]);
-}
-
-function structured(result) {
-  if (result.structuredContent !== undefined) return result.structuredContent;
-  const text = result.content?.find((item) => item.type === 'text')?.text;
-  if (typeof text !== 'string') throw new Error('MCP result contained no structured content');
-  return JSON.parse(text);
-}
+let runtime;
 
 async function git(args) {
   return execFileAsync('git', ['-C', fixture, ...args], { encoding: 'utf8' });
 }
 
-function profileYaml({ id, provider, model, effort }) {
+function profileYaml(id, route) {
   return `  - protocol_version: bridge.dsh.dev/v1alpha1
     profile_id: ${id}
-    description: Model matrix profile for ${provider}/${model}.
+    description: Model matrix profile for ${route.provider}/${route.model}.
     dsh:
-      provider: ${provider}
-      model: ${model}
-${effort === undefined ? '' : `      reasoning_effort: ${effort}\n`}      agent_preset: standard
+      provider: ${route.provider}
+      model: ${route.model}
+      reasoning_effort: ${route.reasoning_effort}
+      agent_preset: standard
       max_tokens: 12000
     delegation:
       max_depth: 2
       max_children: 3
       roles:
         alpha:
-          provider: ${provider}
-          model: ${model}
-${effort === undefined ? '' : `          reasoning_effort: ${effort}\n`}          description: Return the first independently assigned fragment.
+          provider: ${route.provider}
+          model: ${route.model}
+          reasoning_effort: ${route.reasoning_effort}
+          description: Return the first independently assigned fragment.
         beta:
-          provider: ${provider}
-          model: ${model}
-${effort === undefined ? '' : `          reasoning_effort: ${effort}\n`}          description: Return the second independently assigned fragment.
+          provider: ${route.provider}
+          model: ${route.model}
+          reasoning_effort: ${route.reasoning_effort}
+          description: Return the second independently assigned fragment.
     workspace:
       mode: isolated_worktree
       allowed_roots: [.]
@@ -78,25 +81,6 @@ async function setupFixture() {
   await writeFile(join(fixture, 'README.md'), '# DSH model matrix fixture\n');
   await git(['add', 'README.md']);
   await git(['commit', '-qm', 'matrix baseline']);
-  const profiles = [
-    {
-      id: 'kimi-code-high',
-      provider: 'moonshotai-cn',
-      model: 'kimi-k2.7-code',
-      effort: 'high',
-    },
-    {
-      id: 'kimi-code-default',
-      provider: 'moonshotai-cn',
-      model: 'kimi-k2.7-code',
-    },
-    {
-      id: 'deepseek-flash-high',
-      provider: 'deepseek-official',
-      model: 'deepseek-v4-flash',
-      effort: 'high',
-    },
-  ];
   await writeFile(
     join(fixture, 'bridge.yaml'),
     `protocol_version: bridge.dsh.dev/v1alpha1
@@ -105,56 +89,10 @@ log_level: info
 projects:
   - project_id: matrix
     root: .
-    default_profile: deepseek-flash-high
+    default_profile: primary-route
 profiles:
-${profiles.map(profileYaml).join('')}`,
+${profileYaml('primary-route', routes.primary)}${profileYaml('second-route', routes.second)}`,
   );
-}
-
-async function waitTerminal(client, taskId) {
-  for (let attempt = 0; attempt < 36; attempt += 1) {
-    const output = structured(
-      await client.callTool(
-        {
-          name: 'wait_task',
-          arguments: {
-            protocol_version: 'bridge.dsh.dev/v1alpha1',
-            task_id: taskId,
-            timeout_seconds: 10,
-          },
-        },
-        undefined,
-        { timeout: 20_000 },
-      ),
-    );
-    if (
-      ['completed', 'partial', 'cancelled', 'timed_out', 'interrupted', 'failed'].includes(
-        output.task.status,
-      )
-    ) {
-      return output.task;
-    }
-  }
-  throw new Error(`Task ${taskId} did not become terminal`);
-}
-
-async function readPatch(client, result) {
-  const artifact = result.artifacts.artifacts.find((entry) => entry.kind === 'patch');
-  if (artifact === undefined) return { artifact: undefined, patch: '' };
-  const output = structured(
-    await client.callTool({
-      name: 'read_task_artifact',
-      arguments: {
-        protocol_version: 'bridge.dsh.dev/v1alpha1',
-        task_id: result.task_id,
-        artifact_id: artifact.artifact_id,
-        offset: 0,
-        limit: Math.max(1, Math.min(artifact.bytes, 1_048_576)),
-        expected_sha256: artifact.sha256,
-      },
-    }),
-  );
-  return { artifact, patch: output.data };
 }
 
 async function taskRecord(taskId) {
@@ -173,48 +111,24 @@ async function runTask(client, { profile, objective, acceptance, delegation, key
         profile_id: profile,
         objective,
         acceptance_criteria: acceptance,
-        ...(delegation === undefined ? {} : { delegation }),
+        delegation,
         idempotency_key: key,
       },
     }),
   );
   const task = await waitTerminal(client, receipt.task_id);
-  const result = structured(
+  const { result } = structured(
     await client.callTool({
       name: 'get_task_result',
-      arguments: {
-        protocol_version: 'bridge.dsh.dev/v1alpha1',
-        task_id: receipt.task_id,
-      },
+      arguments: { protocol_version: 'bridge.dsh.dev/v1alpha1', task_id: receipt.task_id },
     }),
-  ).result;
-  const patch = await readPatch(client, result);
-  return { receipt, task, result, ...patch, record: await taskRecord(receipt.task_id) };
-}
-
-async function sessionEvidence(sessionId) {
-  if (typeof sessionId !== 'string') return { route: undefined, subagent_calls: 0 };
-  const sessionsRoot = resolve(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'sessions');
-  const paths = await readdir(sessionsRoot, { recursive: true });
-  const relative = paths.find(
-    (path) => typeof path === 'string' && path.endsWith(`${sessionId}/session.jsonl.zstd`),
   );
-  if (relative === undefined) return { route: undefined, subagent_calls: 0 };
-  const { stdout } = await execFileAsync('zstd', ['-dc', resolve(sessionsRoot, relative)], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const events = stdout
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-  const header = events.find((event) => event.type === 'request/header');
-  const subagentCalls = events.filter(
-    (event) => event.type === 'tool/call' && event.data?.name === 'subagent',
-  ).length;
   return {
-    route: header?.data?.header?.config,
-    subagent_calls: subagentCalls,
+    receipt,
+    task,
+    result,
+    ...(await readPatch(client, result)),
+    record: await taskRecord(receipt.task_id),
   };
 }
 
@@ -230,14 +144,27 @@ function compact(run) {
     error: run.result.error,
     delegation_decision: run.result.delegation_decision,
     delegation_evidence: run.result.delegation_evidence,
-    patch_sha256: run.artifact?.sha256,
+    patch_sha256: run.artifact.sha256,
+    patch_hash_verified: run.hash_verified,
   };
 }
 
+const singleDelegation = {
+  strategy: 'single',
+  reason: 'One local file write has no independent workstreams.',
+  roles: [],
+};
+
 async function main() {
+  if (
+    routes.primary.provider === routes.second.provider &&
+    routes.primary.model === routes.second.model
+  )
+    throw new Error('Model matrix requires two distinct provider/model routes');
+  runtime = await readRuntime();
   await setupFixture();
   const transport = new StdioClientTransport({
-    command: 'dsh',
+    command: runtime.command,
     args: ['--profile', 'codex-bridge'],
     cwd: fixture,
     env: environment({
@@ -246,66 +173,66 @@ async function main() {
     }),
     stderr: 'pipe',
   });
-  transport.stderr?.on('data', (chunk) => stderrLines.push(...String(chunk).split('\n')));
-  const client = new Client({ name: 'dsh-model-matrix', version: '0.1.0-alpha.2' });
+  transport.stderr?.on('data', (chunk) =>
+    stderrLines.push(...String(chunk).split('\n').filter(Boolean)),
+  );
+  const client = new Client({ name: 'dsh-model-matrix', version: BRIDGE_VERSION });
   let succeeded = false;
   try {
     await client.connect(transport, { timeout: 15_000 });
+    const server = await verifyConnection(client, runtime);
+    const discoveredRoutes = await discoverRoutes(client, routes);
     const startedAt = new Date().toISOString();
-    process.stderr.write('[matrix] Kimi high + DeepSeek high concurrent run\n');
-    const [kimiHigh, deepseek] = await Promise.all([
+    process.stderr.write(
+      `[matrix] Concurrent ${routes.primary.provider}/${routes.primary.model} + ${routes.second.provider}/${routes.second.model}\n`,
+    );
+    const parallel = await Promise.allSettled([
       runTask(client, {
-        profile: 'kimi-code-high',
+        profile: 'primary-route',
         objective:
-          'Create kimi.txt containing exactly KIMI_2_7_CODE_HIGH_OK followed by one newline.',
-        acceptance: ['kimi.txt has the exact requested single line'],
-        delegation: {
-          strategy: 'single',
-          reason: 'One local file write has no independent workstreams.',
-          roles: [],
-        },
-        key: `kimi-high-${Date.now()}`,
+          'Create primary.txt containing exactly PRIMARY_MODEL_OK followed by one newline. Change no other file.',
+        acceptance: ['primary.txt has the exact requested single line'],
+        delegation: singleDelegation,
+        key: `primary-${Date.now()}`,
       }),
       runTask(client, {
-        profile: 'deepseek-flash-high',
+        profile: 'second-route',
         objective:
-          'Create deepseek.txt containing exactly DEEPSEEK_V4_FLASH_HIGH_OK followed by one newline.',
-        acceptance: ['deepseek.txt has the exact requested single line'],
-        delegation: {
-          strategy: 'single',
-          reason: 'One local file write has no independent workstreams.',
-          roles: [],
-        },
-        key: `deepseek-high-${Date.now()}`,
+          'Create second.txt containing exactly SECOND_MODEL_OK followed by one newline. Change no other file.',
+        acceptance: ['second.txt has the exact requested single line'],
+        delegation: singleDelegation,
+        key: `second-${Date.now()}`,
       }),
     ]);
+    const failures = parallel.filter((result) => result.status === 'rejected');
+    if (failures.length > 0)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        'Model matrix execution failed; no reasoning fallback was attempted',
+      );
+    const [primary, second] = parallel.map((result) => result.value);
+    const primarySession = await savedSession(runtime, primary.record.session_id);
+    const secondSession = await savedSession(runtime, second.record.session_id);
+    const primaryFile = await worktreeProof(
+      primary.record,
+      fixture,
+      'primary.txt',
+      'PRIMARY_MODEL_OK\n',
+    );
+    const secondFile = await worktreeProof(
+      second.record,
+      fixture,
+      'second.txt',
+      'SECOND_MODEL_OK\n',
+    );
 
-    let kimi = kimiHigh;
-    let kimiFallbackUsed = false;
-    if (kimiHigh.task.status !== 'completed') {
-      process.stderr.write('[matrix] Kimi high rejected; retrying model default reasoning\n');
-      kimiFallbackUsed = true;
-      kimi = await runTask(client, {
-        profile: 'kimi-code-default',
-        objective:
-          'Create kimi.txt containing exactly KIMI_2_7_CODE_DEFAULT_OK followed by one newline.',
-        acceptance: ['kimi.txt has the exact requested single line'],
-        delegation: {
-          strategy: 'single',
-          reason: 'One local file write has no independent workstreams.',
-          roles: [],
-        },
-        key: `kimi-default-${Date.now()}`,
-      });
-    }
-
-    process.stderr.write('[matrix] DeepSeek internal multi-agent run\n');
+    process.stderr.write('[matrix] Synchronous internal subagent run\n');
     const multiAgent = await runTask(client, {
-      profile: 'deepseek-flash-high',
+      profile: 'primary-route',
       objective:
-        'You must call the subagent tool exactly twice: ask one child to return exactly ALPHA+ including the literal plus sign, and another child to return exactly BETA. After both finish, concatenate their outputs verbatim in that order and create multi-agent.txt containing exactly ALPHA+BETA followed by one newline. Do not solve the child assignments yourself.',
+        'You must call the subagent tool exactly twice, explicitly passing run_in_background:false to both calls. Ask one child to return exactly ALPHA+ including the literal plus sign, and another child to return exactly BETA. Wait for both successful foreground results, concatenate their outputs verbatim in that order, and create multi-agent.txt containing exactly ALPHA+BETA followed by one newline. Do not solve the child assignments yourself. Change no other file.',
       acceptance: [
-        'two subagent tool calls are recorded',
+        'two synchronous successful subagent tool calls are recorded',
         'multi-agent.txt contains exactly ALPHA+BETA and one newline',
       ],
       delegation: {
@@ -315,111 +242,181 @@ async function main() {
       },
       key: `multi-agent-${Date.now()}`,
     });
+    const multiSession = await savedSession(runtime, multiAgent.record.session_id);
+    const multiFile = await worktreeProof(
+      multiAgent.record,
+      fixture,
+      'multi-agent.txt',
+      'ALPHA+BETA\n',
+    );
 
-    process.stderr.write('[matrix] Continue DeepSeek task in same session\n');
-    const firstDeepseekRunId = deepseek.result.run_id;
-    const firstDeepseekSession = deepseek.record.session_id;
-    structured(
+    process.stderr.write('[matrix] Continue primary task in the same session\n');
+    const firstRunId = primary.result.run_id;
+    const firstSessionId = primary.record.session_id;
+    const continuationArguments = {
+      protocol_version: 'bridge.dsh.dev/v1alpha1',
+      task_id: primary.task.task_id,
+      feedback:
+        'Change primary.txt so it contains exactly PRIMARY_MODEL_CONTINUED followed by one newline. Change no other file.',
+      expected_run_id: firstRunId,
+      idempotency_key: `continue-${Date.now()}`,
+    };
+    const continuationReceipt = structured(
       await client.callTool({
         name: 'continue_task',
-        arguments: {
-          protocol_version: 'bridge.dsh.dev/v1alpha1',
-          task_id: deepseek.task.task_id,
-          feedback:
-            'Change deepseek.txt so it contains exactly DEEPSEEK_V4_FLASH_HIGH_CONTINUED followed by one newline. Change no other file.',
-          expected_run_id: firstDeepseekRunId,
-          idempotency_key: `continue-${Date.now()}`,
-        },
+        arguments: continuationArguments,
       }),
     );
-    const continuedTask = await waitTerminal(client, deepseek.task.task_id);
-    const continuedResult = structured(
+    const retriedContinuation = structured(
+      await client.callTool({
+        name: 'continue_task',
+        arguments: continuationArguments,
+      }),
+    );
+    const continuedTask = await waitTerminal(client, primary.task.task_id);
+    const { result: continuedResult } = structured(
       await client.callTool({
         name: 'get_task_result',
-        arguments: {
-          protocol_version: 'bridge.dsh.dev/v1alpha1',
-          task_id: deepseek.task.task_id,
-        },
+        arguments: { protocol_version: 'bridge.dsh.dev/v1alpha1', task_id: primary.task.task_id },
       }),
-    ).result;
+    );
     const continuedPatch = await readPatch(client, continuedResult);
-    const continuedRecord = await taskRecord(deepseek.task.task_id);
-
-    const kimiSession = await sessionEvidence(kimi.record.session_id);
-    const deepseekSession = await sessionEvidence(continuedRecord.session_id);
-    const multiSession = await sessionEvidence(multiAgent.record.session_id);
+    const continuedRecord = await taskRecord(primary.task.task_id);
+    const continuedSession = await savedSession(
+      runtime,
+      continuedRecord.session_id,
+      primarySession.last_event_seq,
+    );
+    const continuedFile = await worktreeProof(
+      continuedRecord,
+      fixture,
+      'primary.txt',
+      'PRIMARY_MODEL_CONTINUED\n',
+    );
     const overlap =
-      new Date(kimiHigh.task.started_at ?? 0).getTime() <=
-        new Date(deepseek.task.finished_at ?? 0).getTime() &&
-      new Date(deepseek.task.started_at ?? 0).getTime() <=
-        new Date(kimiHigh.task.finished_at ?? 0).getTime();
+      [
+        primary.task.started_at,
+        primary.task.finished_at,
+        second.task.started_at,
+        second.task.finished_at,
+      ].every(
+        (timestamp) => typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)),
+      ) &&
+      new Date(primary.task.started_at ?? 0).getTime() <=
+        new Date(second.task.finished_at ?? 0).getTime() &&
+      new Date(second.task.started_at ?? 0).getTime() <=
+        new Date(primary.task.finished_at ?? 0).getTime();
     const mainStatus = (await git(['status', '--porcelain=v1', '--untracked-files=all'])).stdout
       .split('\n')
       .filter((line) => line && !line.includes('bridge.yaml') && !line.includes('.bridge-matrix'));
+    const matches = (session, route) =>
+      session.routes.length > 0 && session.routes.every((actual) => routeMatches(actual, route));
     const checks = {
-      kimi_model_completed:
-        kimi.task.status === 'completed' && kimi.patch.includes('KIMI_2_7_CODE'),
-      deepseek_high_completed:
-        deepseek.task.status === 'completed' &&
-        deepseek.patch.includes('DEEPSEEK_V4_FLASH_HIGH_OK'),
-      different_models_routed:
-        kimiSession.route?.provider === 'moonshotai-cn' &&
-        kimiSession.route?.model === 'kimi-k2.7-code' &&
-        deepseekSession.route?.provider === 'deepseek-official' &&
-        deepseekSession.route?.model === 'deepseek-v4-flash' &&
-        deepseekSession.route?.reasoningEffort === 'high',
+      continuation_retry_is_idempotent:
+        isDeepStrictEqual(continuationReceipt, retriedContinuation) &&
+        continuedRecord.result_history?.length === 1,
+      primary_model_completed:
+        primary.task.status === 'completed' && primaryFile.exact_bytes && primaryFile.isolated,
+      second_model_completed:
+        second.task.status === 'completed' && secondFile.exact_bytes && secondFile.isolated,
+      distinct_requested_models_routed:
+        matches(primarySession, routes.primary) && matches(secondSession, routes.second),
       concurrent_agent_windows_overlap: overlap,
       internal_multi_agent_completed:
         multiAgent.task.status === 'completed' &&
-        multiAgent.patch.includes('ALPHA+BETA') &&
-        multiSession.subagent_calls >= 2 &&
+        multiFile.exact_bytes &&
+        multiFile.isolated &&
+        matches(multiSession, routes.primary) &&
+        multiSession.subagent_calls === 2 &&
+        multiSession.children.every((child) => child.foreground_requested && child.completed) &&
+        multiSession.children.some((child) => child.output?.trim() === 'ALPHA+') &&
+        multiSession.children.some((child) => child.output?.trim() === 'BETA') &&
         multiAgent.result.delegation_decision?.resolved_strategy === 'multi' &&
-        multiAgent.result.delegation_evidence?.observed?.subagent_calls >= 2 &&
-        multiAgent.result.delegation_evidence?.children_completed >= 2,
+        multiAgent.result.delegation_evidence?.observed?.subagent_calls === 2 &&
+        multiAgent.result.delegation_evidence?.children_completed === 2,
       continuous_same_session:
         continuedTask.status === 'completed' &&
-        firstDeepseekSession === continuedRecord.session_id &&
-        firstDeepseekRunId !== continuedResult.run_id &&
-        continuedPatch.patch.includes('DEEPSEEK_V4_FLASH_HIGH_CONTINUED'),
+        continuationReceipt.task_id === primary.task.task_id &&
+        firstSessionId === continuedRecord.session_id &&
+        firstRunId !== continuedResult.run_id &&
+        continuedFile.exact_bytes &&
+        continuedFile.isolated &&
+        matches(continuedSession, routes.primary),
+      continuation_history_retained:
+        continuedRecord.result_history?.length === 1 &&
+        continuedRecord.result_history[0].run_id === firstRunId,
+      continuation_has_no_old_subagent_evidence:
+        continuedSession.subagent_calls === 0 &&
+        continuedResult.delegation_evidence?.observed?.subagent_calls === 0,
+      all_artifact_hashes_verified:
+        primary.hash_verified &&
+        second.hash_verified &&
+        multiAgent.hash_verified &&
+        continuedPatch.hash_verified,
+      all_sessions_v4: [primarySession, secondSession, multiSession, continuedSession].every(
+        (session) => session.header.version === 4,
+      ),
       main_worktree_unchanged: mainStatus.length === 0,
     };
     const evidence = {
-      schema: 'dsh-codex-bridge/model-matrix-evidence/v2',
+      schema: 'dsh-codex-bridge/model-matrix-evidence/v3',
+      bridge_version: server.version,
+      dsh_version: runtime.dsh_version,
+      runtime,
       started_at: startedAt,
       completed_at: new Date().toISOString(),
-      requested_models: {
-        kimi: { provider: 'moonshotai-cn', model: 'kimi-k2.7-code', reasoning_effort: 'high' },
-        deepseek: {
-          provider: 'deepseek-official',
-          model: 'deepseek-v4-flash',
-          reasoning_effort: 'high',
-        },
-      },
-      kimi_high_attempt: compact(kimiHigh),
-      kimi_fallback_used: kimiFallbackUsed,
-      kimi_effective: { ...compact(kimi), route: kimiSession.route },
-      deepseek: { ...compact(deepseek), route: deepseekSession.route },
+      requested_models: routes,
+      discovered_routes: discoveredRoutes,
+      primary: { ...compact(primary), route: primarySession.route, worktree_proof: primaryFile },
+      second: { ...compact(second), route: secondSession.route, worktree_proof: secondFile },
       multi_agent: {
         ...compact(multiAgent),
         route: multiSession.route,
         subagent_calls: multiSession.subagent_calls,
+        children: multiSession.children,
+        worktree_proof: multiFile,
       },
       continuation: {
         task_id: continuedTask.task_id,
-        first_run_id: firstDeepseekRunId,
+        first_run_id: firstRunId,
         second_run_id: continuedResult.run_id,
-        first_session_id: firstDeepseekSession,
+        first_session_id: firstSessionId,
         second_session_id: continuedRecord.session_id,
         result_history_count: continuedRecord.result_history?.length ?? 0,
-        patch_sha256: continuedPatch.artifact?.sha256,
+        patch_sha256: continuedPatch.artifact.sha256,
+        route: continuedSession.route,
+        worktree_proof: continuedFile,
       },
       checks,
     };
-    await mkdir(dirname(evidencePath), { recursive: true });
-    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-    process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+    for (const [name, session] of Object.entries({
+      primary: primarySession,
+      second: secondSession,
+      multi: multiSession,
+      continued: continuedSession,
+    }))
+      await writeEvidence(
+        evidenceDir,
+        `${name}.session.v4.json`,
+        `${JSON.stringify(session, null, 2)}\n`,
+      );
+    for (const [name, run] of Object.entries({
+      primary,
+      second,
+      multi: multiAgent,
+      continued: continuedPatch,
+    }))
+      await writeEvidence(evidenceDir, `${name}.patch`, run.patch);
+    const evidencePath = await writeEvidence(
+      evidenceDir,
+      'model-matrix.json',
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    process.stdout.write(
+      `${JSON.stringify({ ...evidence, evidence_path: evidencePath }, null, 2)}\n`,
+    );
     succeeded = Object.values(checks).every(Boolean);
-    if (!succeeded) process.exitCode = 1;
+    if (!succeeded) throw new Error(`Model matrix checks failed: ${JSON.stringify(checks)}`);
   } finally {
     await client.close().catch(() => undefined);
     if (succeeded) await rm(fixture, { recursive: true, force: true });
@@ -428,14 +425,22 @@ async function main() {
 
 await main().catch(async (error) => {
   const failure = {
-    schema: 'dsh-codex-bridge/model-matrix-evidence/v2',
+    schema: 'dsh-codex-bridge/model-matrix-evidence/v3',
+    bridge_version: BRIDGE_VERSION,
+    dsh_version: runtime?.dsh_version,
+    expected_dsh_version: DSH_VERSION,
+    runtime,
+    requested_models: routes,
     completed_at: new Date().toISOString(),
     fixture,
     error: error instanceof Error ? error.message : String(error),
-    stderr_tail: stderrLines.filter(Boolean).slice(-50),
+    stderr_tail: stderrLines.slice(-50),
   };
-  await mkdir(dirname(evidencePath), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify(failure, null, 2)}\n`);
-  process.stderr.write(`${failure.error}\n`);
+  const failurePath = await writeEvidence(
+    evidenceDir,
+    'model-matrix.failure.json',
+    `${JSON.stringify(failure, null, 2)}\n`,
+  );
+  process.stderr.write(`${failure.error}\nEvidence: ${failurePath}\n`);
   process.exitCode = 1;
 });

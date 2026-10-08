@@ -9,6 +9,24 @@ import {
 } from '../src/index.js';
 
 describe('MCP contract', () => {
+  it('rejects contradictory reasoning changes', () => {
+    expect(() =>
+      ProfileChangeSchema.parse({
+        operation: 'update',
+        profile_id: 'worker',
+        changes: { dsh: { reasoning_effort: 'high' } },
+        clear_reasoning_effort: true,
+      }),
+    ).toThrow(/set and clear/);
+    expect(
+      ProfileChangeSchema.parse({
+        operation: 'update',
+        profile_id: 'worker',
+        changes: {},
+        clear_reasoning_effort: true,
+      }),
+    ).toMatchObject({ clear_reasoning_effort: true });
+  });
   it('publishes every P0 tool with input and output schemas', () => {
     expect(Object.keys(MCP_TOOL_SCHEMAS)).toEqual([
       'get_setup_status',

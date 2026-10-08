@@ -2,6 +2,7 @@
 
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import {
   access,
@@ -24,6 +25,8 @@ import {
   DshModelCatalogSchema,
   ModelIdSchema,
   PROTOCOL_VERSION,
+  BRIDGE_VERSION,
+  SUPPORTED_DSH_VERSION,
   ProfileSchema,
   ReasoningEffortSchema,
   type Profile,
@@ -34,9 +37,87 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Command } from 'commander';
 
+import { previewDshModelSync } from './model-sync.js';
+
 const execFileAsync = promisify(execFile);
-const VERSION = '0.1.0-alpha.2';
-const DSH_VERSION = '0.1.0-rc.8';
+const VERSION = BRIDGE_VERSION;
+const DSH_VERSION = SUPPORTED_DSH_VERSION;
+
+interface DshLaunchConfig {
+  command: string;
+  dsh_home: string;
+  source_root?: string;
+}
+
+function launcherConfigPath(): string {
+  return resolve(
+    process.env['DSH_BRIDGE_RUNTIME_CONFIG'] ??
+      resolve(
+        process.env['CODEX_HOME'] ?? resolve(homedir(), '.codex'),
+        'dsh-codex-bridge',
+        'runtime.json',
+      ),
+  );
+}
+
+async function dshLaunchConfig(): Promise<DshLaunchConfig> {
+  const override = process.env['DSH_BRIDGE_DSH_BIN'];
+  let saved: DshLaunchConfig | undefined;
+  try {
+    const value: unknown = JSON.parse(await readFile(launcherConfigPath(), 'utf8'));
+    if (
+      !isRecord(value) ||
+      typeof value['command'] !== 'string' ||
+      typeof value['dsh_home'] !== 'string'
+    ) {
+      throw new Error('Bridge runtime configuration is invalid; rerun setup with --dsh-bin.');
+    }
+    saved = {
+      command: value['command'],
+      dsh_home: value['dsh_home'],
+      ...(typeof value['source_root'] === 'string' ? { source_root: value['source_root'] } : {}),
+    };
+  } catch (error) {
+    if (!isRecord(error) || error['code'] !== 'ENOENT') throw error;
+  }
+  return {
+    command: override === undefined ? (saved?.command ?? 'dsh') : resolve(override),
+    dsh_home: process.env['DSH_HOME'] === undefined ? (saved?.dsh_home ?? dshHome()) : dshHome(),
+    ...(saved?.source_root === undefined ? {} : { source_root: saved.source_root }),
+  };
+}
+
+async function runDsh(
+  args: readonly string[],
+  cwd?: string,
+): Promise<{ stdout: string; stderr: string }> {
+  const launch = await dshLaunchConfig();
+  return execFileAsync(launch.command, [...args], {
+    ...(cwd === undefined ? {} : { cwd }),
+    env: { ...process.env, DSH_HOME: launch.dsh_home, DSH_TELEMETRY_DISABLED: '1' },
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+}
+
+async function requireCompatibleDsh(): Promise<DshLaunchConfig> {
+  const launch = await dshLaunchConfig();
+  let version: string;
+  try {
+    const result = await runDsh(['--version']);
+    version = result.stdout.trim();
+  } catch {
+    throw new Error(
+      `DSH is unavailable at ${launch.command}; install DSH ${DSH_VERSION} in a dedicated directory and pass --dsh-bin <absolute-path>.`,
+    );
+  }
+  if (version !== DSH_VERSION) {
+    throw new Error(
+      `Unsupported DSH version ${version}; Bridge ${VERSION} requires ${DSH_VERSION}. Use --dsh-bin <absolute-path> to select a separate runtime.`,
+    );
+  }
+  return launch;
+}
 
 async function run(
   command: string,
@@ -272,7 +353,8 @@ async function writeManagedDshFile(options: {
 }
 
 async function installDshProfile(sourceRoot: string): Promise<string> {
-  const profileRoot = resolve(dshHome(), 'profiles', 'codex-bridge');
+  const launch = await requireCompatibleDsh();
+  const profileRoot = resolve(launch.dsh_home, 'profiles', 'codex-bridge');
   await mkdir(profileRoot, { recursive: true });
   const pluginPath = resolve(sourceRoot, 'packages', 'dsh-plugin');
   if (!(await exists(resolve(pluginPath, 'dist', 'index.js')))) {
@@ -339,14 +421,48 @@ async function installDshProfile(sourceRoot: string): Promise<string> {
     process.stdout.write(`Preserved existing DSH composition/overrides under ${profileRoot}\n`);
   }
   await run('pnpm', ['install', '--dir', profileRoot, '--ignore-workspace']);
-  const { stdout } = await run('dsh', ['--profile', 'codex-bridge', '--dump-config']);
+  const { stdout } = await runDsh(['--profile', 'codex-bridge', '--dump-config']);
   if (!stdout.includes('@dsh-codex-bridge/dsh-plugin')) {
     throw new Error('DSH profile did not compose the bridge plugin bundle.');
   }
   return profileRoot;
 }
 
+async function assertCodexInstallationTarget(sourceRoot: string): Promise<void> {
+  const launcher = resolve(sourceRoot, 'plugins', 'dsh-codex-bridge', 'scripts', 'launch-dsh.mjs');
+  await access(launcher, constants.R_OK);
+  let existing: unknown;
+  try {
+    existing = JSON.parse(
+      (await run('codex', ['mcp', 'get', 'dsh-codex-bridge', '--json'])).stdout,
+    ) as unknown;
+  } catch (error) {
+    const stderr = isRecord(error) && typeof error['stderr'] === 'string' ? error['stderr'] : '';
+    if (!/no mcp server|not found|does not exist/i.test(stderr)) throw error;
+  }
+  if (existing !== undefined) {
+    const transport = isRecord(existing) ? existing['transport'] : undefined;
+    const args = isRecord(transport) ? transport['args'] : undefined;
+    const env = isRecord(transport) ? transport['env'] : undefined;
+    if (
+      !isRecord(transport) ||
+      transport['type'] !== 'stdio' ||
+      !Array.isArray(args) ||
+      args.length !== 1 ||
+      typeof args[0] !== 'string' ||
+      !args[0].endsWith('/plugins/dsh-codex-bridge/scripts/launch-dsh.mjs') ||
+      !isRecord(env) ||
+      typeof env['DSH_BRIDGE_RUNTIME_CONFIG'] !== 'string'
+    ) {
+      throw new Error(
+        'Refusing to replace an unmanaged MCP server named dsh-codex-bridge. Inspect it with codex mcp get before installing.',
+      );
+    }
+  }
+}
+
 async function installCodexPlugin(sourceRoot: string): Promise<void> {
+  const launcher = resolve(sourceRoot, 'plugins', 'dsh-codex-bridge', 'scripts', 'launch-dsh.mjs');
   try {
     await run('codex', ['plugin', 'marketplace', 'add', sourceRoot]);
   } catch (error) {
@@ -354,6 +470,16 @@ async function installCodexPlugin(sourceRoot: string): Promise<void> {
     if (!/already|exists|configured/i.test(message)) throw error;
   }
   await run('codex', ['plugin', 'add', 'dsh-codex-bridge@dsh-codex-bridge']);
+  await run('codex', [
+    'mcp',
+    'add',
+    'dsh-codex-bridge',
+    '--env',
+    `DSH_BRIDGE_RUNTIME_CONFIG=${launcherConfigPath()}`,
+    '--',
+    process.execPath,
+    launcher,
+  ]);
 }
 
 async function install(options: {
@@ -363,7 +489,9 @@ async function install(options: {
   mode: string;
   codexAgent: boolean;
   agentProject?: string;
+  dshBin?: string;
 }): Promise<void> {
+  if (options.dshBin !== undefined) process.env['DSH_BRIDGE_DSH_BIN'] = resolve(options.dshBin);
   if (!['direct', 'native-shell'].includes(options.mode)) {
     throw new Error(`Unsupported mode: ${options.mode}`);
   }
@@ -373,10 +501,19 @@ async function install(options: {
   if ((JSON.parse(packageText) as { name?: string }).name !== 'dsh-codex-bridge') {
     throw new Error(`${sourceRoot} is not a DSH Codex Bridge source checkout.`);
   }
+  if (options.codex) await assertCodexInstallationTarget(sourceRoot);
   if (options.dsh) {
     process.stdout.write(`Installed DSH profile: ${await installDshProfile(sourceRoot)}\n`);
   }
   if (options.codex) {
+    const launch = await requireCompatibleDsh();
+    await atomicWriteText(
+      launcherConfigPath(),
+      `${JSON.stringify({ ...launch, source_root: sourceRoot }, null, 2)}\n`,
+      {
+        replace: true,
+      },
+    );
     await installCodexPlugin(sourceRoot);
     process.stdout.write('Installed Codex plugin. Start a new Codex task to load it.\n');
   }
@@ -399,11 +536,17 @@ async function setupProject(options: {
   mode: string;
   codexAgent: boolean;
   dryRun: boolean;
+  dshBin?: string;
 }): Promise<void> {
+  if (options.dshBin !== undefined) process.env['DSH_BRIDGE_DSH_BIN'] = resolve(options.dshBin);
   if ((options.provider === undefined) !== (options.model === undefined)) {
     throw new Error('--provider and --model must be supplied together.');
   }
   const projectRoot = await realpath(resolve(options.project));
+  const gitRoot = await run('git', ['-C', projectRoot, 'rev-parse', '--show-toplevel']);
+  if ((await realpath(gitRoot.stdout.trim())) !== projectRoot) {
+    throw new Error('setup requires the Git top-level project directory.');
+  }
   const configPath = resolve(projectRoot, 'bridge.yaml');
   const configExists = await exists(configPath);
   const route =
@@ -428,6 +571,8 @@ async function setupProject(options: {
           install: { codex: options.codex, dsh: options.dsh, mode: options.mode },
           create_config: !configExists,
           route: route ?? null,
+          dsh_command: (await dshLaunchConfig()).command,
+          runtime_config: options.codex ? launcherConfigPath() : null,
           next_actions:
             configExists || route !== undefined
               ? ['Run setup without --dry-run after reviewing this plan.']
@@ -452,6 +597,7 @@ async function setupProject(options: {
       mode: options.mode,
       codexAgent: options.codexAgent,
       agentProject: projectRoot,
+      ...(options.dshBin === undefined ? {} : { dshBin: options.dshBin }),
     });
   }
 
@@ -536,14 +682,16 @@ function inheritedEnvironment(overrides: Record<string, string>): Record<string,
 
 async function probeMcp(
   configPath: string,
-): Promise<{ status: string; tools?: string[]; error?: string }> {
+): Promise<{ status: string; tools?: string[]; setup_state?: string; error?: string }> {
+  const launch = await requireCompatibleDsh();
   const absoluteConfig = resolve(configPath);
   const transport = new StdioClientTransport({
-    command: 'dsh',
+    command: launch.command,
     args: ['--profile', 'codex-bridge'],
     cwd: resolve(absoluteConfig, '..'),
     env: inheritedEnvironment({
       DSH_BRIDGE_CONFIG: absoluteConfig,
+      DSH_HOME: launch.dsh_home,
       DSH_TELEMETRY_DISABLED: '1',
     }),
     stderr: 'pipe',
@@ -554,7 +702,18 @@ async function probeMcp(
   try {
     await client.connect(transport, { timeout: 10_000 });
     const tools = await client.listTools(undefined, { timeout: 10_000 });
-    return { status: 'ready', tools: tools.tools.map((tool) => tool.name).sort() };
+    const status = await client.callTool({
+      name: 'get_setup_status',
+      arguments: { protocol_version: PROTOCOL_VERSION },
+    });
+    const payload: unknown = status.structuredContent;
+    return {
+      status: 'ready',
+      tools: tools.tools.map((tool) => tool.name).sort(),
+      ...(isRecord(payload) && typeof payload['state'] === 'string'
+        ? { setup_state: payload['state'] }
+        : {}),
+    };
   } catch (error) {
     return {
       status: 'failed',
@@ -573,13 +732,15 @@ async function callBridgeTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  const launch = await requireCompatibleDsh();
   const absoluteConfig = resolve(configPath);
   const transport = new StdioClientTransport({
-    command: 'dsh',
+    command: launch.command,
     args: ['--profile', 'codex-bridge'],
     cwd: resolve(absoluteConfig, '..'),
     env: inheritedEnvironment({
       DSH_BRIDGE_CONFIG: absoluteConfig,
+      DSH_HOME: launch.dsh_home,
       DSH_TELEMETRY_DISABLED: '1',
     }),
     stderr: 'pipe',
@@ -626,16 +787,19 @@ async function callBridgeTool(
 }
 
 async function doctor(configPath: string): Promise<void> {
+  const launch = await dshLaunchConfig();
   const report: Record<string, unknown> = {
     node: process.version,
     bridge: VERSION,
-    dsh: await commandVersion('dsh', ['--version']),
+    dsh: await commandVersion(launch.command, ['--version']),
+    expected_dsh: DSH_VERSION,
+    dsh_command: launch.command,
     codex: await commandVersion('codex', ['--version']),
     profile: 'not installed',
     config: 'not found',
   };
   try {
-    const { stdout } = await run('dsh', ['--profile', 'codex-bridge', '--dump-config']);
+    const { stdout } = await runDsh(['--profile', 'codex-bridge', '--dump-config']);
     report['profile'] = stdout.includes('@dsh-codex-bridge/dsh-plugin') ? 'ready' : 'invalid';
   } catch (error) {
     report['profile'] = safeErrorMessage(error);
@@ -659,10 +823,13 @@ async function doctor(configPath: string): Promise<void> {
   report['compatible'] =
     report['dsh'] === DSH_VERSION &&
     report['profile'] === 'ready' &&
-    (report['config'] === 'not found' ||
-      (typeof report['mcp'] === 'object' &&
-        report['mcp'] !== null &&
-        (report['mcp'] as { status?: string }).status === 'ready'));
+    typeof report['mcp'] === 'object' &&
+    report['mcp'] !== null &&
+    (report['mcp'] as { status?: string }).status === 'ready' &&
+    (report['mcp'] as { setup_state?: string }).setup_state === 'ready';
+  if (report['dsh'] !== DSH_VERSION)
+    report['next_action'] =
+      `Install DSH ${DSH_VERSION} in a dedicated directory and rerun setup with --dsh-bin <absolute-path>.`;
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (!report['compatible']) process.exitCode = 1;
 }
@@ -745,6 +912,7 @@ program
   .description('Install the Bridge and guide first-time project/model configuration')
   .option('--project <path>', 'Git project root to configure', '.')
   .option('--source <path>', 'Bridge source checkout root', '.')
+  .option('--dsh-bin <path>', 'absolute executable path for the supported DSH runtime')
   .option('--provider <id>', 'exact Provider ID already configured in DSH')
   .option('--model <id>', 'exact Model ID exposed by the selected DSH Provider')
   .option('--profile-id <id>', 'semantic Bridge execution Profile ID', 'dsh-worker')
@@ -769,6 +937,7 @@ program
       mode: string;
       codexAgent: boolean;
       dryRun: boolean;
+      dshBin?: string;
     }) => setupProject(options),
   );
 
@@ -822,6 +991,7 @@ program
   .command('install')
   .description('Install the DSH profile and Codex plugin from this source checkout')
   .option('--source <path>', 'source checkout root', '.')
+  .option('--dsh-bin <path>', 'absolute executable path persisted for the Codex plugin')
   .option('--codex', 'install the Codex marketplace plugin', true)
   .option('--no-codex', 'skip the Codex marketplace plugin')
   .option('--dsh', 'install the DSH profile', true)
@@ -837,6 +1007,7 @@ program
       mode: string;
       codexAgent: boolean;
       skipCodex: boolean;
+      dshBin?: string;
     }) => install({ ...options, codex: options.codex && !options.skipCodex }),
   );
 
@@ -933,6 +1104,11 @@ profilesCommand
   .option('--provider <id>', 'exact Provider ID returned by DSH')
   .option('--model <id>', 'exact Model ID returned by DSH')
   .option('--reasoning-effort <id>', 'reasoning effort advertised by the model')
+  .option(
+    '--clear-reasoning-effort',
+    'remove the old explicit reasoning effort and use the model default',
+    false,
+  )
   .option('--max-tokens <number>', 'per-request token ceiling')
   .option('--config <path>', 'bridge configuration path', 'bridge.yaml')
   .option('--apply', 'write the reviewed change', false)
@@ -944,6 +1120,7 @@ profilesCommand
         provider?: string;
         model?: string;
         reasoningEffort?: string;
+        clearReasoningEffort: boolean;
         maxTokens?: string;
         config: string;
         apply: boolean;
@@ -953,6 +1130,9 @@ profilesCommand
       if ((options.provider === undefined) !== (options.model === undefined)) {
         throw new Error('--provider and --model must be supplied together.');
       }
+      if (options.clearReasoningEffort && options.reasoningEffort !== undefined) {
+        throw new Error('Choose either --reasoning-effort or --clear-reasoning-effort, not both.');
+      }
       const dsh = {
         ...(options.provider === undefined ? {} : { provider: options.provider }),
         ...(options.model === undefined ? {} : { model: options.model }),
@@ -961,10 +1141,16 @@ profilesCommand
           : { reasoning_effort: options.reasoningEffort }),
         ...(options.maxTokens === undefined ? {} : { max_tokens: Number(options.maxTokens) }),
       };
-      if (Object.keys(dsh).length === 0) throw new Error('No Profile changes were requested.');
+      if (Object.keys(dsh).length === 0 && !options.clearReasoningEffort)
+        throw new Error('No Profile changes were requested.');
       await changeProfileConfig({
         config: options.config,
-        change: { operation: 'update', profile_id: profileId, changes: { dsh } },
+        change: {
+          operation: 'update',
+          profile_id: profileId,
+          changes: Object.keys(dsh).length === 0 ? {} : { dsh },
+          ...(options.clearReasoningEffort ? { clear_reasoning_effort: true } : {}),
+        },
         apply: options.apply,
         ...(options.expectedRevision === undefined
           ? {}
@@ -1053,6 +1239,77 @@ profilesCommand
   });
 
 const modelsCommand = program.command('models').description('Discover model routes from DSH');
+
+modelsCommand
+  .command('sync')
+  .description('Preview or sync reference-only Provider settings from another DSH Profile')
+  .option(
+    '--from-profile <id>',
+    'DSH Profile whose configured Provider settings should be reused',
+    'web',
+  )
+  .option('--apply', 'write the reviewed settings into the codex-bridge DSH Profile', false)
+  .option('--expected-revision <sha256>', 'revision returned by the preview')
+  .action(async (options: { fromProfile: string; apply: boolean; expectedRevision?: string }) => {
+    IdentifierSchema.parse(options.fromProfile);
+    if (options.fromProfile === 'codex-bridge')
+      throw new Error('Choose a different source DSH Profile.');
+    const launch = await requireCompatibleDsh();
+    const profileRoot = resolve(launch.dsh_home, 'profiles', 'codex-bridge');
+    const targetPath = resolve(profileRoot, 'cordis.patch.yml');
+    const current = await readFile(targetPath, 'utf8');
+    const revision = createHash('sha256').update(current).digest('hex');
+    const { stdout: source } = await runDsh(['--profile', options.fromProfile, '--dump-config']);
+    const preview = previewDshModelSync(source, current);
+    if (!options.apply) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            applied: false,
+            source_profile: options.fromProfile,
+            target_profile: 'codex-bridge',
+            before_revision: revision,
+            provider_entries: preview.provider_entries,
+            credential_values_copied: false,
+            restart_required: true,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
+    if (options.expectedRevision !== revision)
+      throw new Error(
+        'DSH Profile revision changed or --expected-revision is missing; preview again.',
+      );
+    const lockPath = `${targetPath}.dsh-bridge.lock`;
+    const lock = await open(lockPath, 'wx', 0o600);
+    try {
+      const actualRevision = createHash('sha256')
+        .update(await readFile(targetPath))
+        .digest('hex');
+      if (actualRevision !== revision)
+        throw new Error('DSH Profile revision changed; preview again.');
+      const backupRoot = resolve(
+        profileRoot,
+        '.bridge-install-backups',
+        `model-sync-${Date.now()}`,
+      );
+      await writeManagedDshFile({
+        profileRoot,
+        backupRoot,
+        relativePath: 'cordis.patch.yml',
+        content: preview.serialized,
+      });
+    } finally {
+      await lock.close();
+      await rm(lockPath, { force: true });
+    }
+    process.stdout.write(
+      `${JSON.stringify({ applied: true, provider_entries: preview.provider_entries, credential_values_copied: false, restart_required: true }, null, 2)}\n`,
+    );
+  });
 
 modelsCommand
   .command('list')

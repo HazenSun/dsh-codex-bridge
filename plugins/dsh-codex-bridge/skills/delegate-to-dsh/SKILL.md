@@ -13,6 +13,8 @@ Default to automatic routing. Before `delegate_task`, resolve the request to `si
 
 Record a concise rationale and any requested roles in the delegation request. Never claim a multi-Agent run merely because the prompt asked for one: verify the result's delegation evidence and warnings.
 
+For multi-Agent objectives, require DSH to use foreground children (`run_in_background: false`) and wait for their results before concluding. A background tool acknowledgement proves queueing, not completed child work; Bridge excludes it from child-completion evidence.
+
 ## Before delegation
 
 1. Call `get_setup_status`. If setup is not `ready`, follow the bundled `setup-dsh-bridge` workflow instead of returning a generic missing-configuration error.

@@ -47,4 +47,6 @@ Enable Sub-Agents only when the user wants multi-Agent work and the chosen DSH P
 - `set_default`: point one project at an existing Profile.
 - `remove`: remove a Profile only when every affected project receives an explicit replacement default.
 
-Always preview, obtain approval, and apply with the expected SHA-256 revision.
+Always preview and apply with the expected SHA-256 revision within the user's authorization. Honor preview-only requests and explicit confirmation preferences; do not ask again for the same action when approval was already given.
+
+When switching models, omitted reasoning fields keep the existing value. If the new model does not support that value, use `update.clear_reasoning_effort: true` with a small `changes.dsh` route update (CLI: `profiles update --clear-reasoning-effort`). Never silently downgrade an explicitly requested effort, and never combine a reset with setting a new effort in the same change.

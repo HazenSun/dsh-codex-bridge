@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { ConfigRegistry } from '@dsh-codex-bridge/config';
 import type { DshRunResult, DshRuntime } from '@dsh-codex-bridge/dsh-runtime';
@@ -34,11 +34,13 @@ import {
 } from '@dsh-codex-bridge/workspace';
 
 export * from './store.js';
-import type {
-  StoredOperationKind,
-  StoredOperationReceipt,
-  StoredTask,
-  TaskStore,
+import {
+  TaskLeaseConflictError,
+  type TaskLease,
+  type StoredOperationKind,
+  type StoredOperationReceipt,
+  type StoredTask,
+  type TaskStore,
 } from './store.js';
 
 const MAX_DELEGATION_EVIDENCE_CHILDREN = 128;
@@ -200,6 +202,8 @@ export class TaskEngine {
   readonly #controllers = new Map<string, AbortController>();
   readonly #waiters = new Map<string, Set<() => void>>();
   readonly #operationLocks = new Map<string, Promise<void>>();
+  readonly #leases = new Map<string, TaskLease>();
+  readonly #executions = new Map<string, Promise<void>>();
 
   constructor(options: TaskEngineOptions) {
     this.#config = options.config;
@@ -219,49 +223,57 @@ export class TaskEngine {
     return this.#withOperationLock(
       input.idempotency_key === undefined ? undefined : `delegate:${input.idempotency_key}`,
       async () => {
-        const existing = await this.#findIdempotent(input.idempotency_key);
-        if (existing !== undefined) return receipt(existing.task);
+        const create = async (): Promise<TaskDispatchReceipt> => {
+          const existing = await this.#findIdempotent(input.idempotency_key);
+          if (existing !== undefined) return receipt(existing.task);
 
-        const project = this.#config.project(input.project_id);
-        const profile = this.#config.profile(input.profile_id);
-        const createdAt = now();
-        const { request: delegation, decision: delegationDecision } = this.#resolveDelegation(
-          input,
-          profile,
-          createdAt,
-        );
-        const taskId = identifier('task');
-        const task: Task = {
-          protocol_version: PROTOCOL_VERSION,
-          task_id: taskId,
-          trace_id: input.trace_id ?? identifier('trace'),
-          origin: input.origin ?? 'codex',
-          delegation_depth: input.delegation_depth ?? 0,
-          project_id: project.project_id,
-          workspace_id: identifier('workspace'),
-          profile_id: profile.profile_id,
-          objective: input.objective,
-          acceptance_criteria: input.acceptance_criteria ?? [],
-          delegation,
-          delegation_decision: delegationDecision,
-          status: TaskStatus.validating,
-          run_id: identifier('run'),
-          created_at: createdAt,
-          updated_at: createdAt,
-          ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
+          const project = this.#config.project(input.project_id);
+          const profile = this.#config.profile(input.profile_id);
+          const createdAt = now();
+          const { request: delegation, decision: delegationDecision } = this.#resolveDelegation(
+            input,
+            profile,
+            createdAt,
+          );
+          const taskId = identifier('task');
+          const task: Task = {
+            protocol_version: PROTOCOL_VERSION,
+            task_id: taskId,
+            trace_id: input.trace_id ?? identifier('trace'),
+            origin: input.origin ?? 'codex',
+            delegation_depth: input.delegation_depth ?? 0,
+            project_id: project.project_id,
+            workspace_id: identifier('workspace'),
+            profile_id: profile.profile_id,
+            objective: input.objective,
+            acceptance_criteria: input.acceptance_criteria ?? [],
+            delegation,
+            delegation_decision: delegationDecision,
+            status: TaskStatus.validating,
+            run_id: identifier('run'),
+            created_at: createdAt,
+            updated_at: createdAt,
+            ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
+          };
+          const record: StoredTask = {
+            task,
+            project_root: project.root,
+            base_ref: input.workspace?.base_ref ?? 'HEAD',
+            ...(input.idempotency_key === undefined
+              ? {}
+              : { idempotency_key: input.idempotency_key }),
+          };
+          return this.#withTaskLease(taskId, async (lease, retain) => {
+            await this.#save(record);
+            const queued = await this.#transition(record, TaskStatus.queued);
+            retain();
+            this.#schedule(queued, profile, lease);
+            return receipt(queued.task);
+          });
         };
-        const record: StoredTask = {
-          task,
-          project_root: project.root,
-          base_ref: input.workspace?.base_ref ?? 'HEAD',
-          ...(input.idempotency_key === undefined
-            ? {}
-            : { idempotency_key: input.idempotency_key }),
-        };
-        await this.#store.save(record);
-        const queued = await this.#transition(record, TaskStatus.queued);
-        this.#schedule(queued, profile);
-        return receipt(queued.task);
+        if (input.idempotency_key === undefined) return create();
+        const dispatchLock = `task_dispatch_${createHash('sha256').update(input.idempotency_key).digest('hex')}`;
+        return this.#withTaskLease(dispatchLock, async () => create());
       },
     );
   }
@@ -319,70 +331,77 @@ export class TaskEngine {
       throw new TaskConflictError('Continuation feedback must not be empty');
     }
 
-    const lockKey = `continue:${request.taskId}:${request.idempotencyKey ?? 'serial'}`;
+    await this.#awaitFinishedExecution(request.taskId);
+    const lockKey = `task:${request.taskId}`;
     return this.#withOperationLock(lockKey, async () => {
-      let record = await this.#required(request.taskId);
-      const existing = this.#operationReceipt(record, request.idempotencyKey, 'continue');
-      if (existing !== undefined) return existing as TaskDispatchReceipt;
+      const snapshot = await this.#required(request.taskId);
+      const replay = this.#operationReceipt(snapshot, request.idempotencyKey, 'continue');
+      if (replay !== undefined) return replay as TaskDispatchReceipt;
+      return this.#withTaskLease(request.taskId, async (lease, retain) => {
+        let record = await this.#required(request.taskId);
+        const existing = this.#operationReceipt(record, request.idempotencyKey, 'continue');
+        if (existing !== undefined) return existing as TaskDispatchReceipt;
 
-      if (!canTransitionTaskStatus(record.task.status, TaskStatus.queued)) {
-        throw new TaskConflictError(
-          `Task ${request.taskId} cannot continue while ${record.task.status}`,
-        );
-      }
-      if (record.session_id === undefined) {
-        throw new TaskConflictError(
-          `Task ${request.taskId} has no persisted DSH session to continue`,
-        );
-      }
-      if (request.expectedRunId !== undefined && record.task.run_id !== request.expectedRunId) {
-        throw new TaskConflictError(
-          `Task ${request.taskId} run_id changed; expected ${request.expectedRunId}, found ${record.task.run_id ?? 'none'}`,
-        );
-      }
+        if (!canTransitionTaskStatus(record.task.status, TaskStatus.queued)) {
+          throw new TaskConflictError(
+            `Task ${request.taskId} cannot continue while ${record.task.status}`,
+          );
+        }
+        if (record.session_id === undefined) {
+          throw new TaskConflictError(
+            `Task ${request.taskId} has no persisted DSH session to continue`,
+          );
+        }
+        if (request.expectedRunId !== undefined && record.task.run_id !== request.expectedRunId) {
+          throw new TaskConflictError(
+            `Task ${request.taskId} run_id changed; expected ${request.expectedRunId}, found ${record.task.run_id ?? 'none'}`,
+          );
+        }
 
-      const profile = this.#config.profile(record.task.profile_id);
-      const previousResult = record.result;
-      const resultHistory =
-        previousResult === undefined
-          ? record.result_history
-          : [...(record.result_history ?? []), previousResult];
-      const nextTask: Task = {
-        ...record.task,
-        objective: request.feedback,
-        acceptance_criteria:
-          request.acceptanceCriteria === undefined
-            ? record.task.acceptance_criteria
-            : [...request.acceptanceCriteria],
-        run_id: identifier('run'),
-      };
-      delete nextTask.error;
-      delete nextTask.delegation_evidence;
-      delete nextTask.started_at;
-      delete nextTask.finished_at;
+        const profile = this.#config.profile(record.task.profile_id);
+        const previousResult = record.result;
+        const resultHistory =
+          previousResult === undefined
+            ? record.result_history
+            : [...(record.result_history ?? []), previousResult];
+        const nextTask: Task = {
+          ...record.task,
+          objective: request.feedback,
+          acceptance_criteria:
+            request.acceptanceCriteria === undefined
+              ? record.task.acceptance_criteria
+              : [...request.acceptanceCriteria],
+          run_id: identifier('run'),
+        };
+        delete nextTask.error;
+        delete nextTask.delegation_evidence;
+        delete nextTask.started_at;
+        delete nextTask.finished_at;
 
-      const recordWithoutResult = { ...record };
-      delete recordWithoutResult.result;
-      const nextRecord: StoredTask = {
-        ...recordWithoutResult,
-        task: nextTask,
-        ...(resultHistory === undefined ? {} : { result_history: resultHistory }),
-      };
-      record = await this.#transition(nextRecord, TaskStatus.queued, {
-        clearFinished: true,
+        const recordWithoutResult = { ...record };
+        delete recordWithoutResult.result;
+        const nextRecord: StoredTask = {
+          ...recordWithoutResult,
+          task: nextTask,
+          ...(resultHistory === undefined ? {} : { result_history: resultHistory }),
+        };
+        record = await this.#transition(nextRecord, TaskStatus.queued, {
+          clearFinished: true,
+        });
+
+        const dispatch = receipt(record.task);
+        if (request.idempotencyKey !== undefined) {
+          record = await this.#rememberOperation(
+            record,
+            request.idempotencyKey,
+            'continue',
+            dispatch,
+          );
+        }
+        retain();
+        this.#schedule(record, profile, lease);
+        return dispatch;
       });
-
-      const dispatch = receipt(record.task);
-      if (request.idempotencyKey !== undefined) {
-        record = await this.#rememberOperation(
-          record,
-          request.idempotencyKey,
-          'continue',
-          dispatch,
-        );
-      }
-      this.#schedule(record, profile);
-      return dispatch;
     });
   }
 
@@ -404,52 +423,58 @@ export class TaskEngine {
             idempotencyKey: undefined,
             reason: inputOrTaskId.reason,
           };
-    const lockKey = `cancel:${request.taskId}:${request.idempotencyKey ?? 'serial'}`;
+    const lockKey = `task:${request.taskId}`;
 
-    return this.#withOperationLock(lockKey, async () => {
-      let record = await this.#required(request.taskId);
-      const existing = this.#operationReceipt(record, request.idempotencyKey, 'cancel');
-      if (existing !== undefined) return existing as TaskOperationReceipt;
+    return this.#withOperationLock(lockKey, () =>
+      this.#withTaskLease(
+        request.taskId,
+        async () => {
+          let record = await this.#required(request.taskId);
+          const existing = this.#operationReceipt(record, request.idempotencyKey, 'cancel');
+          if (existing !== undefined) return existing as TaskOperationReceipt;
 
-      let result: TaskOperationReceipt;
-      if (record.task.status === TaskStatus.queued) {
-        const error = errorForTerminalStatus(
-          'cancelled',
-          request.reason ?? 'Task cancelled before execution',
-        );
-        record = await this.#finalizeTerminal(record, TaskStatus.cancelled, error);
-        result = operationReceipt(record.task, TaskStatus.cancelled);
-      } else if (record.task.status === TaskStatus.running) {
-        const cancelling = await this.#transition(record, TaskStatus.cancelling);
-        const controller = this.#controllers.get(request.taskId);
-        if (controller === undefined) {
-          record = await this.#finalizeTerminal(
-            cancelling,
-            TaskStatus.cancelled,
-            errorForTerminalStatus('cancelled', request.reason),
-          );
-          result = operationReceipt(record.task, TaskStatus.cancelled);
-        } else {
-          controller.abort(new Error(request.reason ?? 'Cancelled by Codex'));
-          result = operationReceipt(cancelling.task, TaskStatus.cancelling);
-          record = cancelling;
-        }
-      } else if (
-        record.task.status === TaskStatus.cancelling ||
-        record.task.status === TaskStatus.cancelled
-      ) {
-        result = operationReceipt(record.task, record.task.status);
-      } else {
-        throw new TaskConflictError(
-          `Task ${request.taskId} cannot cancel while ${record.task.status}`,
-        );
-      }
+          let result: TaskOperationReceipt;
+          if (record.task.status === TaskStatus.queued) {
+            const error = errorForTerminalStatus(
+              'cancelled',
+              request.reason ?? 'Task cancelled before execution',
+            );
+            record = await this.#finalizeTerminal(record, TaskStatus.cancelled, error);
+            result = operationReceipt(record.task, TaskStatus.cancelled);
+          } else if (record.task.status === TaskStatus.running) {
+            const cancelling = await this.#transition(record, TaskStatus.cancelling);
+            const controller = this.#controllers.get(request.taskId);
+            if (controller === undefined) {
+              record = await this.#finalizeTerminal(
+                cancelling,
+                TaskStatus.cancelled,
+                errorForTerminalStatus('cancelled', request.reason),
+              );
+              result = operationReceipt(record.task, TaskStatus.cancelled);
+            } else {
+              controller.abort(new Error(request.reason ?? 'Cancelled by Codex'));
+              result = operationReceipt(cancelling.task, TaskStatus.cancelling);
+              record = cancelling;
+            }
+          } else if (
+            record.task.status === TaskStatus.cancelling ||
+            record.task.status === TaskStatus.cancelled
+          ) {
+            result = operationReceipt(record.task, record.task.status);
+          } else {
+            throw new TaskConflictError(
+              `Task ${request.taskId} cannot cancel while ${record.task.status}`,
+            );
+          }
 
-      if (request.idempotencyKey !== undefined) {
-        await this.#rememberOperation(record, request.idempotencyKey, 'cancel', result);
-      }
-      return result;
-    });
+          if (request.idempotencyKey !== undefined) {
+            await this.#rememberOperation(record, request.idempotencyKey, 'cancel', result);
+          }
+          return result;
+        },
+        true,
+      ),
+    );
   }
 
   async wait(taskId: string, timeoutSeconds: number): Promise<Task> {
@@ -489,53 +514,81 @@ export class TaskEngine {
 
   async reconcile(): Promise<void> {
     for (const stored of await this.#store.list()) {
-      if (this.#controllers.has(stored.task.task_id)) continue;
-      let record = await this.#ensureRunId(stored);
-      if (record.task.status === TaskStatus.queued) {
-        this.#schedule(record, this.#config.profile(record.task.profile_id));
-        continue;
-      }
-      if (record.task.status === TaskStatus.validating) {
-        record = await this.#transition(record, TaskStatus.queued);
-        this.#schedule(record, this.#config.profile(record.task.profile_id));
-        continue;
-      }
-      if (
-        record.task.status === TaskStatus.preparing_workspace ||
-        record.task.status === TaskStatus.running ||
-        record.task.status === TaskStatus.waiting_input ||
-        record.task.status === TaskStatus.collecting ||
-        record.task.status === TaskStatus.cancelling
-      ) {
-        await this.#finalizeTerminal(
-          record,
-          TaskStatus.interrupted,
-          errorForTerminalStatus('interrupted'),
-        );
+      if (this.#leases.has(stored.task.task_id)) continue;
+      try {
+        await this.#withTaskLease(stored.task.task_id, async (lease, retain) => {
+          const latest = await this.#store.get(stored.task.task_id);
+          if (latest === undefined) return;
+          let record = await this.#ensureRunId(latest);
+          if (record.task.status === TaskStatus.queued) {
+            const profile = this.#config.profile(record.task.profile_id);
+            retain();
+            this.#schedule(record, profile, lease);
+            return;
+          }
+          if (record.task.status === TaskStatus.validating) {
+            record = await this.#transition(record, TaskStatus.queued);
+            const profile = this.#config.profile(record.task.profile_id);
+            retain();
+            this.#schedule(record, profile, lease);
+            return;
+          }
+          if (
+            record.task.status === TaskStatus.preparing_workspace ||
+            record.task.status === TaskStatus.running ||
+            record.task.status === TaskStatus.waiting_input ||
+            record.task.status === TaskStatus.collecting ||
+            record.task.status === TaskStatus.cancelling
+          ) {
+            await this.#finalizeTerminal(
+              record,
+              TaskStatus.interrupted,
+              errorForTerminalStatus('interrupted'),
+            );
+          }
+        });
+      } catch (error) {
+        if (!(error instanceof TaskLeaseConflictError)) throw error;
+        // An active PID, uncertain owner, or corrupt lease is never an orphan signal.
       }
     }
   }
 
-  #schedule(record: StoredTask, profile: Profile): void {
-    queueMicrotask(() => void this.#execute(record, profile));
+  #schedule(record: StoredTask, profile: Profile, lease: TaskLease): void {
+    queueMicrotask(() => {
+      const execution = this.#execute(record, profile, lease);
+      this.#executions.set(record.task.task_id, execution);
+      void execution
+        .finally(() => {
+          if (this.#executions.get(record.task.task_id) === execution)
+            this.#executions.delete(record.task.task_id);
+        })
+        .catch(() => this.#notify(record.task.task_id));
+    });
   }
 
-  async #execute(record: StoredTask, profile: Profile): Promise<void> {
-    const latest = await this.#store.get(record.task.task_id);
-    if (latest === undefined || latest.task.status !== TaskStatus.queued) return;
-
-    const controller = new AbortController();
-    this.#controllers.set(record.task.task_id, controller);
-    const timeout = setTimeout(
-      () => controller.abort(new Error('Task timed out')),
-      profile.policy.timeout_seconds * 1_000,
-    );
-    let current = await this.#ensureRunId(latest);
+  async #execute(record: StoredTask, profile: Profile, lease: TaskLease): Promise<void> {
+    let controller: AbortController | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let current = record;
     let manager: WorkspaceManager | undefined;
     let workspace: WorkspaceHandle | undefined;
     let runtimeResult: DshRunResult | undefined;
     try {
-      current = await this.#transition(current, TaskStatus.preparing_workspace);
+      const prepared = await this.#withOperationLock(`task:${record.task.task_id}`, async () => {
+        const latest = await this.#store.get(record.task.task_id);
+        if (latest === undefined || latest.task.status !== TaskStatus.queued) return undefined;
+        controller = new AbortController();
+        this.#controllers.set(record.task.task_id, controller);
+        const active = controller;
+        timeout = setTimeout(
+          () => active.abort(new Error('Task timed out')),
+          profile.policy.timeout_seconds * 1_000,
+        );
+        return this.#transition(await this.#ensureRunId(latest), TaskStatus.preparing_workspace);
+      });
+      if (prepared === undefined || controller === undefined) return;
+      current = prepared;
       manager = new WorkspaceManager({
         allowedRoots: profile.workspace.allowed_roots,
         worktreesRoot: `${this.#config.value.data_root}/worktrees/${current.task.project_id}`,
@@ -544,7 +597,7 @@ export class TaskEngine {
         current.workspace ??
         (await manager.create(current.task.task_id, current.project_root, current.base_ref));
       current = { ...current, workspace };
-      await this.#store.save(current);
+      await this.#save(current);
       current = await this.#transition(current, TaskStatus.running, { started: true });
 
       runtimeResult = await this.#runtime.run({
@@ -559,14 +612,32 @@ export class TaskEngine {
         agentPreset: profile.dsh.agent_preset,
         ...(current.session_id === undefined ? {} : { sessionId: current.session_id }),
         signal: controller.signal,
+        onSessionReady: async (sessionId) => {
+          await this.#withOperationLock(`task:${record.task.task_id}`, async () => {
+            const latest = await this.#required(record.task.task_id);
+            if (
+              latest.task.run_id !== current.task.run_id ||
+              (latest.session_id !== undefined && latest.session_id !== sessionId)
+            ) {
+              throw new TaskConflictError('The DSH session binding changed during startup');
+            }
+            current = { ...latest, session_id: sessionId };
+            await this.#save(current);
+          });
+        },
       });
-      const latestAfterRun = await this.#store.get(current.task.task_id);
-      if (controller.signal.aborted || latestAfterRun?.task.status === TaskStatus.cancelling) {
-        throw controller.signal.reason ?? new Error('Task cancellation requested');
-      }
-      current = { ...current, session_id: runtimeResult.sessionId };
-      await this.#store.save(current);
-      current = await this.#transition(current, TaskStatus.collecting);
+      const completedRun = runtimeResult;
+      const active = controller;
+      current = await this.#withOperationLock(`task:${record.task.task_id}`, async () => {
+        const latest = await this.#required(record.task.task_id);
+        if (active.signal.aborted || latest.task.status === TaskStatus.cancelling)
+          throw active.signal.reason ?? new Error('Task cancellation requested');
+        if (latest.session_id !== undefined && latest.session_id !== completedRun.sessionId)
+          throw new TaskConflictError('The DSH runtime returned a different session');
+        const bound = { ...latest, session_id: completedRun.sessionId };
+        await this.#save(bound);
+        return this.#transition(bound, TaskStatus.collecting);
+      });
       current = await this.#collect(current, manager, workspace, profile, runtimeResult);
       const terminal =
         runtimeResult.reason?.kind === 'completed' &&
@@ -579,7 +650,7 @@ export class TaskEngine {
           ...current,
           result: { ...current.result, status: terminal, completed_at: now() },
         };
-        await this.#store.save(current);
+        await this.#save(current);
       }
       this.#notify(current.task.task_id);
     } catch (error) {
@@ -587,9 +658,10 @@ export class TaskEngine {
       if (isTerminalTaskStatus(current.task.status)) {
         return;
       }
-      const timedOut = isTimeoutAbort(controller.signal);
+      const timedOut = controller !== undefined && isTimeoutAbort(controller.signal);
       const cancelled =
-        current.task.status === TaskStatus.cancelling || isCancellationAbort(controller.signal);
+        current.task.status === TaskStatus.cancelling ||
+        (controller !== undefined && isCancellationAbort(controller.signal));
       const terminal = cancelled
         ? TaskStatus.cancelled
         : timedOut
@@ -597,7 +669,7 @@ export class TaskEngine {
           : TaskStatus.failed;
       const terminalError = errorForTerminalStatus(
         terminal,
-        terminal === TaskStatus.failed ? error : (controller.signal.reason ?? error),
+        terminal === TaskStatus.failed ? error : (controller?.signal.reason ?? error),
       );
 
       if (manager !== undefined && workspace !== undefined && current.result === undefined) {
@@ -611,6 +683,9 @@ export class TaskEngine {
     } finally {
       clearTimeout(timeout);
       this.#controllers.delete(record.task.task_id);
+      if (this.#leases.get(record.task.task_id)?.ownerToken === lease.ownerToken)
+        this.#leases.delete(record.task.task_id);
+      await lease.release();
     }
   }
 
@@ -650,7 +725,7 @@ export class TaskEngine {
         : { ...record.task, delegation_evidence: delegationEvidence };
     const result = this.#makeResult(task, workspaceArtifacts, profile, runtime, manifest);
     const updated = { ...record, task, result };
-    await this.#store.save(updated);
+    await this.#save(updated);
     return updated;
   }
 
@@ -703,7 +778,12 @@ export class TaskEngine {
             usage: {
               input_tokens: runtime.usage.inputTokens,
               output_tokens: runtime.usage.outputTokens,
-              total_tokens: runtime.usage.inputTokens + runtime.usage.outputTokens,
+              total_tokens:
+                runtime.usage.totalTokens ??
+                runtime.usage.inputTokens +
+                  runtime.usage.outputTokens +
+                  (runtime.usage.cacheReadTokens ?? 0) +
+                  (runtime.usage.cacheWriteTokens ?? 0),
               providers: [],
             },
           }),
@@ -767,7 +847,7 @@ export class TaskEngine {
       ...transitioned,
       result: { ...result, status, completed_at: completedAt, error },
     };
-    await this.#store.save(final);
+    await this.#save(final);
     this.#notify(final.task.task_id);
     return final;
   }
@@ -988,7 +1068,7 @@ export class TaskEngine {
         [key]: stored,
       },
     };
-    await this.#store.save(updated);
+    await this.#save(updated);
     return updated;
   }
 
@@ -998,7 +1078,7 @@ export class TaskEngine {
       ...record,
       task: { ...record.task, run_id: identifier('run'), updated_at: now() },
     };
-    await this.#store.save(updated);
+    await this.#save(updated);
     return updated;
   }
 
@@ -1019,7 +1099,7 @@ export class TaskEngine {
     if (options.started) task.started_at = timestamp;
     if (options.finished) task.finished_at = timestamp;
     const updated = { ...record, task };
-    await this.#store.save(updated);
+    await this.#save(updated);
     this.#notify(task.task_id);
     return updated;
   }
@@ -1040,6 +1120,50 @@ export class TaskEngine {
       release();
       if (this.#operationLocks.get(key) === queued) this.#operationLocks.delete(key);
     }
+  }
+
+  async #withTaskLease<T>(
+    taskId: string,
+    operation: (lease: TaskLease, retain: () => void) => Promise<T>,
+    allowOwnedRun = false,
+  ): Promise<T> {
+    const owned = this.#leases.get(taskId);
+    if (owned !== undefined) {
+      if (!allowOwnedRun)
+        throw new TaskConflictError(
+          `Task ${taskId} is already owned by an active operation or run`,
+        );
+      await owned.assertOwned();
+      return operation(owned, () => {});
+    }
+    const lease = await this.#store.acquireLease(taskId);
+    this.#leases.set(taskId, lease);
+    let retained = false;
+    try {
+      return await operation(lease, () => {
+        retained = true;
+      });
+    } finally {
+      if (!retained) {
+        if (this.#leases.get(taskId)?.ownerToken === lease.ownerToken) this.#leases.delete(taskId);
+        await lease.release();
+      }
+    }
+  }
+
+  async #save(record: StoredTask): Promise<void> {
+    const lease = this.#leases.get(record.task.task_id);
+    if (lease === undefined)
+      throw new TaskConflictError(`Task ${record.task.task_id} has no write lease`);
+    await lease.assertOwned();
+    await this.#store.save(record);
+  }
+
+  async #awaitFinishedExecution(taskId: string): Promise<void> {
+    const execution = this.#executions.get(taskId);
+    if (execution === undefined) return;
+    const record = await this.#required(taskId);
+    if (isTerminalTaskStatus(record.task.status)) await execution.catch(() => undefined);
   }
 
   #notify(taskId: string): void {

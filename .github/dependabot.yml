@@ -9,6 +9,32 @@ updates:
     groups:
       development-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # DSH releases are an exact-version runtime contract. Update the packages,
+      # installer, compatibility checks, and CI together in a reviewed release.
+      - dependency-name: '@deepseek-ai/dsh*'
+      # tsup's declaration builder uses the TypeScript 5 compiler API.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: tsup
+        update-types: [version-update:semver-major]
+      # Protocol schema generation still consumes Zod 3 schemas.
+      - dependency-name: zod
+        update-types: [version-update:semver-major]
+      - dependency-name: zod-to-json-schema
+        update-types: [version-update:semver-major]
+      # Keep the lint stack and Node declarations within the supported lines.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: '@eslint/*'
+        update-types: [version-update:semver-major]
+      - dependency-name: typescript-eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@deepseek-ai/cordis'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /

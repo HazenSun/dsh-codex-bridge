@@ -7,7 +7,6 @@ import type {
   LlmModelInfo,
   LlmResolvedModelInfo,
 } from '@deepseek-ai/dsh-llm';
-import { settingsNamespace } from '@deepseek-ai/dsh-settings';
 import { ArtifactStore } from '@dsh-codex-bridge/artifacts';
 import {
   applyProfileChange,
@@ -49,13 +48,23 @@ import {
   type PutArtifactInput,
 } from '@dsh-codex-bridge/task-engine';
 import '@deepseek-ai/dsh-agent';
-import '@deepseek-ai/dsh-agent-presets';
+import '@deepseek-ai/dsh-agent-preset-registry';
 import '@deepseek-ai/dsh-llm';
 import '@deepseek-ai/dsh-session';
+import '@deepseek-ai/dsh-session-persistence';
+import '@deepseek-ai/dsh-session-projection';
 import '@deepseek-ai/dsh-settings';
 
 export const name = 'dsh-codex-bridge';
-export const inject = ['agents', 'sessions', 'llm', 'settings', 'agentPresets'];
+export const inject = [
+  'agents',
+  'sessions',
+  'llm',
+  'settings',
+  'agentPresets',
+  'sessionPersistence',
+  'sessionProjections',
+];
 
 function safeErrorMessage(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
@@ -104,7 +113,9 @@ function configurableProviderIsConfigured(
 ): boolean {
   const settings = ctx.get('settings');
   if (settings === undefined) return false;
-  let value: unknown = settings.get(settingsNamespace(provider.settingsNs));
+  let value: unknown = settings
+    .describe({ redactSecrets: true })
+    .find((section) => String(section.ns) === provider.settingsNs)?.value;
   for (const segment of provider.settingsPath) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
     value = (value as Record<string, unknown>)[segment];
@@ -258,6 +269,9 @@ function configChange(change: ProfileChange): ProfileChangeRequest {
       profile_id: change.profile_id,
       ...(change.profile === undefined ? {} : { profile: change.profile }),
       ...(change.changes === undefined ? {} : { changes: change.changes }),
+      ...(change.clear_reasoning_effort === undefined
+        ? {}
+        : { clear_reasoning_effort: change.clear_reasoning_effort }),
     };
   }
   if (change.operation === 'remove') {
@@ -448,7 +462,7 @@ export class InProcessSetupControl implements BridgeSetupPort {
       before_revision: snapshot.revision,
       change: input.change,
       summary: preview.summary,
-      diff: preview.diff_text.slice(0, 100_000),
+      diff: preview.diff_text === '' ? '(no changes)' : preview.diff_text.slice(0, 100_000),
     };
   }
 

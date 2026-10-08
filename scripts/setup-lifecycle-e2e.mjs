@@ -1,30 +1,35 @@
-import { execFile } from 'node:child_process';
-import { readFile, readdir, rm, writeFile, mkdtemp } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { readFile, rm, writeFile, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  BRIDGE_VERSION,
+  DSH_VERSION,
+  discoverRoutes,
+  environment,
+  evidenceDirectory,
+  execFileAsync,
+  readPatch,
+  readRuntime,
+  requestedRoutes,
+  routeMatches,
+  savedSession,
+  sha256,
+  structured,
+  verifyConnection,
+  waitTerminal,
+  worktreeProof,
+  writeEvidence,
+} from './e2e-support.mjs';
 
-const execFileAsync = promisify(execFile);
 const fixture = await mkdtemp(join(tmpdir(), 'dsh-bridge-setup-e2e-'));
+const evidenceDir = await evidenceDirectory('dsh-bridge-setup-e2e');
 const configPath = join(fixture, 'bridge.yaml');
 const stderrLines = [];
-
-function environment(overrides) {
-  return Object.fromEntries([
-    ...Object.entries(process.env).filter((entry) => typeof entry[1] === 'string'),
-    ...Object.entries(overrides),
-  ]);
-}
-
-function structured(result) {
-  if (result.structuredContent !== undefined) return result.structuredContent;
-  const text = result.content?.find((item) => item.type === 'text')?.text;
-  if (typeof text !== 'string') throw new Error('MCP result contained no structured content');
-  return JSON.parse(text);
-}
+const routes = requestedRoutes();
+let runtime;
 
 async function git(args) {
   return execFileAsync('git', ['-C', fixture, ...args], { encoding: 'utf8' });
@@ -56,15 +61,15 @@ log_level: info
 projects:
   - project_id: setup-e2e
     root: .
-    default_profile: deepseek-baseline
+    default_profile: baseline-route
 profiles:
   - protocol_version: bridge.dsh.dev/v1alpha1
-    profile_id: deepseek-baseline
+    profile_id: baseline-route
     description: Baseline route retained across setup rollback.
     dsh:
-      provider: deepseek-official
-      model: deepseek-v4-flash
-      reasoning_effort: high
+      provider: ${routes.primary.provider}
+      model: ${routes.primary.model}
+      reasoning_effort: ${routes.primary.reasoning_effort}
       agent_preset: standard
       max_tokens: 8000
     delegation:
@@ -91,7 +96,7 @@ profiles:
 
 async function connectBridge() {
   const transport = new StdioClientTransport({
-    command: 'dsh',
+    command: runtime.command,
     args: ['--profile', 'codex-bridge'],
     cwd: fixture,
     env: environment({
@@ -103,20 +108,26 @@ async function connectBridge() {
   transport.stderr?.on('data', (chunk) => {
     stderrLines.push(...String(chunk).split('\n').filter(Boolean));
   });
-  const client = new Client({ name: 'dsh-setup-lifecycle', version: '0.1.0-alpha.2' });
-  await client.connect(transport, { timeout: 15_000 });
-  return client;
+  const client = new Client({ name: 'dsh-setup-lifecycle', version: BRIDGE_VERSION });
+  try {
+    await client.connect(transport, { timeout: 15_000 });
+    await verifyConnection(client, runtime);
+    return client;
+  } catch (error) {
+    await client.close().catch(() => undefined);
+    throw error;
+  }
 }
 
-function kimiProfile() {
+function secondProfile() {
   return {
     protocol_version: 'bridge.dsh.dev/v1alpha1',
-    profile_id: 'kimi-lifecycle',
-    description: 'Kimi route created through the guarded setup control plane.',
+    profile_id: 'second-lifecycle',
+    description: `Route ${routes.second.provider}/${routes.second.model} created through the guarded setup control plane.`,
     dsh: {
-      provider: 'moonshotai-cn',
-      model: 'kimi-k2.7-code',
-      reasoning_effort: 'high',
+      provider: routes.second.provider,
+      model: routes.second.model,
+      reasoning_effort: routes.second.reasoning_effort,
       agent_preset: 'standard',
       max_tokens: 8000,
     },
@@ -135,53 +146,17 @@ function kimiProfile() {
   };
 }
 
-async function waitTerminal(client, taskId) {
-  for (let attempt = 0; attempt < 36; attempt += 1) {
-    const output = structured(
-      await client.callTool(
-        {
-          name: 'wait_task',
-          arguments: {
-            protocol_version: 'bridge.dsh.dev/v1alpha1',
-            task_id: taskId,
-            timeout_seconds: 10,
-          },
-        },
-        undefined,
-        { timeout: 20_000 },
-      ),
-    );
-    if (['completed', 'partial', 'failed', 'cancelled', 'timed_out'].includes(output.task.status)) {
-      return output.task;
-    }
-  }
-  throw new Error(`Task ${taskId} did not become terminal`);
-}
-
 async function sessionRoute(taskId) {
   const task = JSON.parse(
     await readFile(join(fixture, '.bridge-setup-e2e', 'tasks', taskId, 'task.json'), 'utf8'),
   );
-  const sessionsRoot = resolve(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'sessions');
-  const paths = await readdir(sessionsRoot, { recursive: true });
-  const relative = paths.find(
-    (path) => typeof path === 'string' && path.endsWith(`${task.session_id}/session.jsonl.zstd`),
-  );
-  if (relative === undefined) return undefined;
-  const { stdout } = await execFileAsync('zstd', ['-dc', resolve(sessionsRoot, relative)], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const header = stdout
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line))
-    .find((event) => event.type === 'request/header');
-  return header?.data?.header?.config;
+  return { ...(await savedSession(runtime, task.session_id)), record: task };
 }
 
 async function main() {
+  runtime = await readRuntime();
   await setupFixture();
+  const baselineConfigSha = sha256(await readFile(configPath));
   const startedAt = new Date().toISOString();
   let client = await connectBridge();
   let succeeded = false;
@@ -197,25 +172,11 @@ async function main() {
       if (!tools.includes(tool)) throw new Error(`Missing setup tool: ${tool}`);
     }
 
-    const catalog = structured(
-      await client.callTool({
-        name: 'discover_dsh_models',
-        arguments: { protocol_version: 'bridge.dsh.dev/v1alpha1', include_details: true },
-      }),
-    );
-    const deepseek = catalog.providers
-      .find((provider) => provider.provider === 'deepseek-official')
-      ?.models.find((model) => model.model === 'deepseek-v4-flash');
-    const kimi = catalog.providers
-      .find((provider) => provider.provider === 'moonshotai-cn')
-      ?.models.find((model) => model.model === 'kimi-k2.7-code');
-    if (deepseek === undefined || kimi === undefined) {
-      throw new Error('Required DeepSeek/Kimi routes were not discovered from live DSH');
-    }
+    const discoveredRoutes = await discoverRoutes(client, routes);
 
     const change = {
       operation: 'add',
-      profile: kimiProfile(),
+      profile: secondProfile(),
       set_default_for: ['setup-e2e'],
     };
     const preview = structured(
@@ -224,7 +185,8 @@ async function main() {
         arguments: { protocol_version: 'bridge.dsh.dev/v1alpha1', change },
       }),
     );
-    if (!preview.diff.includes('kimi-lifecycle') || preview.before_revision === undefined) {
+    const previewConfigSha = sha256(await readFile(configPath));
+    if (!preview.diff.includes('second-lifecycle') || preview.before_revision === undefined) {
       throw new Error('Profile preview did not return the expected semantic diff/revision');
     }
     const applied = structured(
@@ -237,6 +199,7 @@ async function main() {
         },
       }),
     );
+    const appliedConfigSha = sha256(await readFile(configPath));
     const stale = await client.callTool({
       name: 'apply_profile_change',
       arguments: {
@@ -244,11 +207,12 @@ async function main() {
         change: {
           operation: 'set_default',
           project_id: 'setup-e2e',
-          profile_id: 'deepseek-baseline',
+          profile_id: 'baseline-route',
         },
         expected_revision: preview.before_revision,
       },
     });
+    const afterStaleConfigSha = sha256(await readFile(configPath));
     if (stale.isError !== true) throw new Error('Stale configuration revision was not rejected');
 
     await client.close();
@@ -259,7 +223,7 @@ async function main() {
         arguments: { protocol_version: 'bridge.dsh.dev/v1alpha1' },
       }),
     );
-    if (!profiles.profiles.some((profile) => profile.profile_id === 'kimi-lifecycle')) {
+    if (!profiles.profiles.some((profile) => profile.profile_id === 'second-lifecycle')) {
       throw new Error('Applied Profile was not visible after MCP restart');
     }
 
@@ -270,7 +234,7 @@ async function main() {
         arguments: {
           protocol_version: 'bridge.dsh.dev/v1alpha1',
           project_id: 'setup-e2e',
-          profile_id: 'kimi-lifecycle',
+          profile_id: 'second-lifecycle',
           objective:
             'Create lifecycle.txt containing exactly SETUP_PROFILE_REAL_CALL_OK followed by one newline.',
           acceptance_criteria: ['lifecycle.txt contains the exact requested line'],
@@ -293,24 +257,19 @@ async function main() {
         },
       }),
     ).result;
-    const patchArtifact = result.artifacts.artifacts.find((artifact) => artifact.kind === 'patch');
-    const patch =
-      patchArtifact === undefined
-        ? ''
-        : structured(
-            await client.callTool({
-              name: 'read_task_artifact',
-              arguments: {
-                protocol_version: 'bridge.dsh.dev/v1alpha1',
-                task_id: receipt.task_id,
-                artifact_id: patchArtifact.artifact_id,
-                offset: 0,
-                limit: Math.max(1, patchArtifact.bytes),
-                expected_sha256: patchArtifact.sha256,
-              },
-            }),
-          ).data;
-    const route = await sessionRoute(receipt.task_id);
+    const {
+      artifact: patchArtifact,
+      patch,
+      hash_verified: hashVerified,
+    } = await readPatch(client, result);
+    const session = await sessionRoute(receipt.task_id);
+    const route = session.route;
+    const actualFile = await worktreeProof(
+      session.record,
+      fixture,
+      'lifecycle.txt',
+      'SETUP_PROFILE_REAL_CALL_OK\n',
+    );
     const afterTaskStatus = await sourceStatus();
 
     const status = structured(
@@ -330,6 +289,7 @@ async function main() {
     );
     await client.close();
     client = await connectBridge();
+    const restoredConfigSha = sha256(await readFile(configPath));
     const profilesAfterRollback = structured(
       await client.callTool({
         name: 'list_profiles',
@@ -337,29 +297,41 @@ async function main() {
       }),
     );
     const checks = {
-      live_models_discovered: deepseek !== undefined && kimi !== undefined,
+      live_models_discovered:
+        discoveredRoutes.primary.confirmed && discoveredRoutes.second.confirmed,
       preview_and_revision_returned:
-        typeof preview.before_revision === 'string' && preview.diff.includes('kimi-lifecycle'),
+        typeof preview.before_revision === 'string' && preview.diff.includes('second-lifecycle'),
+      preview_did_not_write: previewConfigSha === baselineConfigSha,
       atomic_apply_requires_restart: applied.changed === true && applied.restart_required === true,
       stale_revision_rejected: stale.isError === true,
+      stale_revision_did_not_write: appliedConfigSha === afterStaleConfigSha,
       profile_visible_after_restart: profiles.profiles.some(
-        (profile) => profile.profile_id === 'kimi-lifecycle',
+        (profile) => profile.profile_id === 'second-lifecycle',
       ),
       real_call_completed:
-        task.status === 'completed' && patch.includes('SETUP_PROFILE_REAL_CALL_OK'),
-      real_kimi_route_observed:
-        route?.provider === 'moonshotai-cn' &&
-        route?.model === 'kimi-k2.7-code' &&
-        route?.reasoningEffort === 'high',
+        task.status === 'completed' &&
+        patch.includes('SETUP_PROFILE_REAL_CALL_OK') &&
+        actualFile.isolated &&
+        actualFile.exact_bytes,
+      real_requested_route_observed:
+        session.routes.length > 0 &&
+        session.routes.every((actual) => routeMatches(actual, routes.second)),
+      session_v4_readback: session.header.version === 4,
+      artifact_hash_verified: hashVerified,
       task_preserved_main_worktree: beforeTaskStatus === afterTaskStatus,
       rollback_completed: rolledBack.changed === true,
       rollback_removed_profile: !profilesAfterRollback.profiles.some(
-        (profile) => profile.profile_id === 'kimi-lifecycle',
+        (profile) => profile.profile_id === 'second-lifecycle',
       ),
+      rollback_restored_exact_config: restoredConfigSha === baselineConfigSha,
     };
     const evidence = {
-      schema: 'dsh-codex-bridge/setup-lifecycle-evidence/v1',
-      bridge_version: '0.1.0-alpha.2',
+      schema: 'dsh-codex-bridge/setup-lifecycle-evidence/v2',
+      bridge_version: client.getServerVersion().version,
+      dsh_version: runtime.dsh_version,
+      runtime,
+      requested_models: routes,
+      discovered_routes: discoveredRoutes,
       started_at: startedAt,
       completed_at: new Date().toISOString(),
       fixture,
@@ -370,9 +342,31 @@ async function main() {
         rolled_back: rolledBack.config_revision,
       },
       observed_route: route,
+      artifact: patchArtifact,
+      worktree_proof: actualFile,
+      config_hashes: {
+        before: baselineConfigSha,
+        preview: previewConfigSha,
+        applied: appliedConfigSha,
+        after_stale: afterStaleConfigSha,
+        restored: restoredConfigSha,
+      },
       checks,
     };
-    process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+    await writeEvidence(
+      evidenceDir,
+      'setup-lifecycle.session.v4.json',
+      `${JSON.stringify(session, null, 2)}\n`,
+    );
+    await writeEvidence(evidenceDir, 'setup-lifecycle.patch', patch);
+    const evidencePath = await writeEvidence(
+      evidenceDir,
+      'setup-lifecycle.json',
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    process.stdout.write(
+      `${JSON.stringify({ ...evidence, evidence_path: evidencePath }, null, 2)}\n`,
+    );
     succeeded = Object.values(checks).every(Boolean);
     if (!succeeded) throw new Error(`Setup lifecycle checks failed: ${JSON.stringify(checks)}`);
   } finally {
@@ -381,13 +375,28 @@ async function main() {
   }
 }
 
-await main().catch((error) => {
+await main().catch(async (error) => {
+  const failure = {
+    schema: 'dsh-codex-bridge/setup-lifecycle-evidence/v2',
+    bridge_version: BRIDGE_VERSION,
+    dsh_version: runtime?.dsh_version,
+    expected_dsh_version: DSH_VERSION,
+    runtime,
+    requested_models: routes,
+    fixture,
+    error: error instanceof Error ? error.message : String(error),
+    stderr_tail: stderrLines.slice(-50),
+  };
+  const failurePath = await writeEvidence(
+    evidenceDir,
+    'setup-lifecycle.failure.json',
+    `${JSON.stringify(failure, null, 2)}\n`,
+  );
   process.stderr.write(
     `${JSON.stringify(
       {
-        fixture,
-        error: error instanceof Error ? error.message : String(error),
-        stderr_tail: stderrLines.slice(-50),
+        ...failure,
+        evidence_path: failurePath,
       },
       null,
       2,

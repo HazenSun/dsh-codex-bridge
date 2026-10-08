@@ -364,7 +364,8 @@
                     }
                   },
                   "additionalProperties": false
-                }
+                },
+                "clear_reasoning_effort": { "type": "boolean" }
               },
               "required": ["operation", "profile_id"],
               "additionalProperties": false

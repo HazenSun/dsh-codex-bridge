@@ -5,9 +5,10 @@
 
 - id: system-prompt
   config:
-    persona: >-
+    personaPrefix: >-
       You are an implementation agent powered by {{model}}. Your working directory is {{cwd}}.
       Work only inside that workspace and finish with concise, verifiable evidence.
+    personaSuffix: ''
 
 - id: sandbox-policy
   config:
@@ -32,14 +33,38 @@
 - id: session-telemetry-otel
   disabled: true
 
-- insert:
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+# One-shot tools; Bridge accepts only foreground child completion evidence.
+- id: tool-subagent
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: one-shot
+    maxDepth: 2
 
-    - id: agent-presets
-      name: '@deepseek-ai/dsh-agent-presets'
+- id: tool-subagent-fork
+  config:
+    provider: fork
+    toolName: subagent_fork
+    backgroundMode: one-shot
+    maxDepth: 2
+
+- insert:
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
+
+    - id: preset-standard
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: standard
+        name: Bridge implementation
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: Implement only the bounded Bridge task and return verifiable evidence.
+              suffix: Your working directory is {{cwd}}.
 
     - id: dsh-codex-bridge
       name: '@dsh-codex-bridge/dsh-plugin'

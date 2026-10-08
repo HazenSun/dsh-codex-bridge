@@ -9,6 +9,7 @@ import {
   ListProfilesInputSchema,
   PreviewProfileChangeInputSchema,
   PROTOCOL_VERSION,
+  BRIDGE_VERSION,
   ReadTaskArtifactInputSchema,
   RollbackProfileChangeInputSchema,
   WaitTaskInputSchema,
@@ -52,7 +53,7 @@ function content(value: unknown) {
 
 export function createBridgeMcpServer(options: BridgeMcpOptions): McpServer {
   const server = new McpServer(
-    { name: 'dsh-codex-bridge', version: '0.1.0-alpha.2' },
+    { name: 'dsh-codex-bridge', version: BRIDGE_VERSION },
     {
       instructions:
         'Inspect get_setup_status before delegation. When setup is incomplete, discover DSH models, preview any Profile change, and require user approval before apply or rollback. Never request or store provider credentials. When ready, select declared Profiles and treat DSH results as reviewable evidence.',

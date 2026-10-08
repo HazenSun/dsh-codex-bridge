@@ -8,16 +8,44 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  publication-content:
+    name: Publication content
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node --test scripts/check-publication-content.test.mjs
+      - name: Check changed publication files
+        env:
+          PUBLICATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PUBLICATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/check-publication-content.mjs --base "$PUBLICATION_BASE" --head "$PUBLICATION_HEAD"
+
   verify:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    needs: publication-content
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         node: [22.19.0, 24]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -27,12 +55,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - run: pnpm audit --audit-level high
 
   real-dsh-contract:
-    name: DSH rc.8 profile contract
+    name: DSH 0.2.0-rc.2 profile contract
     runs-on: ubuntu-latest
+    needs: publication-content
+    timeout-minutes: 20
+    env:
+      DSH_VERSION: 0.2.0-rc.2
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -41,12 +76,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm install --global @deepseek-ai/dsh@0.1.0-rc.8
-      - run: test "$(dsh --version)" = "0.1.0-rc.8"
+      - run: npm install --global "@deepseek-ai/dsh@$DSH_VERSION"
+      - run: test "$(dsh --version)" = "$DSH_VERSION"
       - run: pnpm build
       - run: pnpm dsh-bridge install --source . --no-codex
       - run: dsh --profile codex-bridge --dump-config | grep '@dsh-codex-bridge/dsh-plugin'
 
 # The credentialed `pnpm test:e2e:dsh` run is intentionally not executed on
-# untrusted pull requests. Maintainers run it before a release and retain the
-# redacted evidence manifest under tests/e2e/evidence/.
+# untrusted pull requests. Maintainers keep new run evidence outside the
+# publication tree; the existing redacted evidence remains historical reference.

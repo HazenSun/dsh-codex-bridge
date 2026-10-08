@@ -2,7 +2,7 @@
 
 DSH × Codex Bridge 会让一个本地 Agent 在代码目录、Shell、网络和模型 Provider 之间流动。安全目标不是让 Agent“永远正确”，而是把它限制在可审查、可取消、可恢复的边界内。
 
-> 本页描述 `0.1.0-alpha.2` 的安全基线和剩余缺口。已执行约束与配置中预留但尚未接入的策略必须区分；单独阅读文档不能替代运行验证。
+> 本页描述 `0.1.0-alpha.3` 的安全基线和剩余缺口。已执行约束与配置中预留但尚未接入的策略必须区分；单独阅读文档不能替代运行验证。DSH 官方明确其尚未接受安全审计，沙箱、审批和权限控制不能保证隔离，见 [官方安全说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/SAFETY.zh.md)。
 
 ## 1. Trust boundaries
 
@@ -40,7 +40,13 @@ Worktree、Shell、网络、Artifact Store
 | 任务超时      | 有限 Wall Time                  | 取消失效时仍可回收资源                   |
 | 结果          | 结构化、带 Hash、可分页         | 防止日志和大 Diff 污染上下文             |
 
-`0.1.0-alpha.2` 默认不启用 `direct_write`、自动部署、自动提交或自动合并。网络策略字段尚未完整映射到 Bridge 执行器，因此高敏感项目应在操作系统、容器或网络层增加独立限制。
+`0.1.0-alpha.3` 默认不启用 `direct_write`、自动部署、自动提交或自动合并。网络策略字段尚未完整映射到 Bridge 执行器，因此高敏感项目应在操作系统、容器或网络层增加独立限制。
+
+### 本机任务所有权
+
+每个任务的写入与执行受独占文件租约保护，使用随机 owner、PID 活性检查和排他的死 owner 回收门禁。新 MCP 查询同一存储时不会把活进程的任务误标中断；另一进程可以读取，却不能续写或假称已取消该任务。取消仍需通过执行它的 MCP。遇到损坏锁或无法确认的 PID，系统保守拒绝写入，不按 TTL 删除活进程的锁。
+
+用户 turn 提交前，DSH Session 元数据会 flush，Bridge 保存其绑定。进程退出后可把确实无活 owner 的运行标为 interrupted；已绑定的会话保留续接条件，尚未创建会话的任务不能凭空续接。该保护针对同机本地文件系统，不是多主机共享存储的分布式锁或安全沙箱。
 
 ## 3. 文件系统与 Worktree
 
@@ -182,13 +188,13 @@ pnpm test:e2e:setup
 
 发布人应设置 `DSH_BRIDGE_EVIDENCE_DIR` 到仓库外的临时目录，不提交原始运行日志、本地路径或新的凭据化执行产物。
 
-它会真实启动 DSH `0.1.0-rc.8` 的 `codex-bridge` Profile，调用当前机器配置的 Provider/Model，而不是 Fake LLM。测试在临时 Git Fixture 中验证 MCP 工具、Profile 路由、隔离 Worktree、Patch、Artifact Hash 和主工作区不变；可复核证据为 [`real-dsh-rc8.json`](../tests/e2e/evidence/real-dsh-rc8.json) 与 [`real-dsh-rc8.patch`](../tests/e2e/evidence/real-dsh-rc8.patch)。
+当前脚本真实启动锁定的 DSH `0.2.0-rc.2`，确认精确 Provider/Model/Reasoning 后执行请求，在临时 Git Fixture 中核对 Session V4、Worktree、文件字节、Patch Hash、继续及取消。默认运行收据写入仓库外临时目录，并拒绝覆盖旧收据。[`real-dsh-rc8.json`](../tests/e2e/evidence/real-dsh-rc8.json) 与对应 Patch 仅记录 rc.8 的历史结果。
 
 ## 11. 开发与发布安全清单
 
 - [ ] `pnpm audit` 或等效依赖检查通过，结果可追溯。
 - [ ] 发布包不包含 `.env`、Provider credential、私有日志或本地路径快照。
-- [ ] DSH `0.1.0-rc.8`、Codex Plugin 和共享协议版本同步且有兼容矩阵。
+- [ ] DSH `0.2.0-rc.2`、Codex Plugin 和共享协议版本同步且有兼容矩阵。
 - [ ] Path / Symlink / Secret Redaction / Command Policy 测试通过。
 - [ ] MCP stdout 只有协议帧，诊断写 stderr 或受控文件。
 - [ ] 取消、超时、SIGTERM、MCP EOF 和进程崩溃均有 E2E 证据。

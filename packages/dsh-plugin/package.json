@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/dsh-plugin",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "DeepSeek Harness bundle that hosts the DSH Codex Bridge MCP gateway.",
   "repository": {
     "type": "git",
@@ -34,12 +34,16 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-persona": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session-persistence": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-settings": "0.2.0-rc.2",
     "@dsh-codex-bridge/artifacts": "workspace:*",
     "@dsh-codex-bridge/config": "workspace:*",
     "@dsh-codex-bridge/dsh-runtime": "workspace:*",
@@ -53,12 +57,18 @@
     "typescript": "^5.9.2"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-settings": "0.1.0-rc.8"
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-settings": "0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public"

@@ -18,6 +18,18 @@ const manifests = await Promise.all(
 const plugin = await json('plugins/dsh-codex-bridge/.codex-plugin/plugin.json');
 const marketplace = await json('.agents/plugins/marketplace.json');
 const errors = [];
+const runtimePackage = await json('packages/dsh-plugin/package.json');
+const supportedDsh = runtimePackage.peerDependencies['@deepseek-ai/dsh'];
+for (const path of ['plugins/dsh-codex-bridge/scripts/launch-dsh.mjs', 'scripts/e2e-support.mjs']) {
+  const text = await readFile(resolve(root, path), 'utf8');
+  if (!text.includes(`'${supportedDsh}'`))
+    errors.push(`${path}: supported DSH version is not synchronized`);
+}
+const constants = await readFile(resolve(root, 'packages/protocol/src/constants.ts'), 'utf8');
+if (!constants.includes(`BRIDGE_VERSION = '${rootPackage.version}'`))
+  errors.push('protocol release version differs from packages');
+if (!constants.includes(`SUPPORTED_DSH_VERSION = '${supportedDsh}'`))
+  errors.push('protocol DSH version differs from integration peer');
 
 for (const { directory, manifest } of manifests) {
   if (manifest.version !== rootPackage.version) {

@@ -45,7 +45,7 @@ flowchart TB
 ```text
 plugins/dsh-codex-bridge/
 ├── .codex-plugin/plugin.json
-├── .mcp.json
+├── scripts/launch-dsh.mjs
 ├── skills/
 │   ├── setup-dsh-bridge/SKILL.md
 │   └── delegate-to-dsh/SKILL.md
@@ -56,7 +56,7 @@ plugins/dsh-codex-bridge/
 
 职责：
 
-- 声明本地 MCP Server 启动命令。
+- 提供 Setup 与委派 Skill。源码安装器通过官方 `codex mcp add` 注册本地 STDIO MCP，使用明确的 Node/启动脚本路径和非敏感 `runtime.json` 路径，不依赖插件 JSON 的模板展开。
 - 在配置尚未就绪时保留 Setup-only MCP，让 Codex 可以诊断状态和发现 DSH 模型。
 - 通过设置 Skill 完成首次引导、Profile 预览/写入、Revision 保护和回滚。
 - 通过 Skill 教 Codex 何时委派、如何选择 Profile、如何审查结果。

@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-bridge",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "private": true,
   "description": "A local-first bridge that lets Codex delegate implementation work to DeepSeek Harness agents.",
   "homepage": "https://github.com/HazenSun/dsh-codex-bridge#readme",
@@ -38,27 +38,29 @@
     "format:check": "prettier --check .",
     "lint": "pnpm build && eslint .",
     "release:check": "node scripts/check-release-consistency.mjs",
+    "publication:check": "node scripts/check-publication-content.mjs",
     "release:publish": "changeset publish",
     "release:version": "changeset version",
     "test": "vitest run",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "test:e2e:dsh": "node scripts/real-dsh-e2e.mjs",
     "test:e2e:model-matrix": "node scripts/model-matrix-e2e.mjs",
     "test:e2e:setup": "node scripts/setup-lifecycle-e2e.mjs",
     "test:watch": "vitest",
     "typecheck": "pnpm -r --if-present typecheck",
     "validate:plugin": "node scripts/validate-codex-plugin.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:scripts && pnpm publication:check && pnpm docs:check && pnpm validate:plugin && pnpm release:check"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "^9.34.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/node": "^24.3.0",
     "eslint": "^9.34.0",
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.41.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   }
 }

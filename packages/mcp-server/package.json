@@ -1,6 +1,6 @@
 {
   "name": "@dsh-codex-bridge/mcp-server",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "STDIO MCP gateway exposing DSH Codex Bridge task tools.",
   "repository": {
     "type": "git",
@@ -30,13 +30,13 @@
   "dependencies": {
     "@dsh-codex-bridge/protocol": "workspace:*",
     "@dsh-codex-bridge/task-engine": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   }
 }

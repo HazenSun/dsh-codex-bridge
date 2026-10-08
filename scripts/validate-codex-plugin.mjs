@@ -24,7 +24,7 @@ if (!Array.isArray(manifest.interface?.capabilities)) {
   errors.push('interface.capabilities must be an array');
 }
 
-for (const path of [manifest.skills, manifest.mcpServers]) {
+for (const path of [manifest.skills]) {
   if (typeof path !== 'string' || !path.startsWith('./')) {
     errors.push(`invalid plugin-relative path: ${String(path)}`);
     continue;
@@ -32,10 +32,17 @@ for (const path of [manifest.skills, manifest.mcpServers]) {
   await access(resolve(root, path)).catch(() => errors.push(`missing plugin path: ${path}`));
 }
 
-const mcp = JSON.parse(await readFile(resolve(root, '.mcp.json'), 'utf8'));
-const server = mcp.mcpServers?.['dsh-codex-bridge'];
-if (server?.command !== 'dsh' || !server.args?.includes('codex-bridge')) {
-  errors.push('MCP server must launch the codex-bridge DSH profile');
+if (manifest.mcpServers !== undefined)
+  errors.push('Local MCP is registered by the installer, not through unexpanded plugin paths');
+if (
+  !Array.isArray(manifest.interface?.defaultPrompt) ||
+  manifest.interface.defaultPrompt.length > 3
+)
+  errors.push('The plugin must provide at most three starter prompts');
+await access(resolve(root, 'scripts/launch-dsh.mjs'));
+const onboardingSkill = manifest.extensions?.['com.openai']?.onboardingSkill;
+if (onboardingSkill !== './skills/setup-dsh-bridge/SKILL.md') {
+  errors.push('Plugin setup must reference the packaged onboarding Skill');
 }
 const skill = await readFile(resolve(root, 'skills', 'delegate-to-dsh', 'SKILL.md'), 'utf8');
 if (!skill.startsWith('---\n') || !skill.includes('\nname: delegate-to-dsh\n')) {

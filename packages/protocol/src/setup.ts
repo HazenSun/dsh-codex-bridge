@@ -109,6 +109,7 @@ export const ProfileChangeSchema = z
         profile_id: ProfileIdSchema,
         profile: ProfileSchema.optional(),
         changes: ProfileUpdateSchema.optional(),
+        clear_reasoning_effort: z.boolean().optional(),
       })
       .strict(),
     z
@@ -127,6 +128,18 @@ export const ProfileChangeSchema = z
       .strict(),
   ])
   .superRefine((value, context) => {
+    if (
+      value.operation === 'update' &&
+      value.clear_reasoning_effort === true &&
+      (value.profile?.dsh.reasoning_effort !== undefined ||
+        value.changes?.dsh?.reasoning_effort !== undefined)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'cannot set and clear reasoning effort in the same change',
+        path: ['clear_reasoning_effort'],
+      });
+    }
     if (
       value.operation === 'update' &&
       (value.profile === undefined) === (value.changes === undefined)

@@ -198,6 +198,7 @@ export interface UpdateProfileChange {
   /** Prefer `changes` for a partial update; a full `profile` is also accepted. */
   readonly changes?: ProfileDefinitionChanges;
   readonly profile?: Profile;
+  readonly clear_reasoning_effort?: boolean;
 }
 
 export interface RemoveProfileChange {
@@ -316,6 +317,7 @@ const ProfileChangeRequestSchema = z.discriminatedUnion('operation', [
       profile_id: IdentifierSchema,
       changes: z.record(z.unknown()).optional(),
       profile: ProfileSchema.optional(),
+      clear_reasoning_effort: z.boolean().optional(),
     })
     .strict(),
   z
@@ -466,6 +468,13 @@ function normalizeProfileChangeRequest(
   let normalized = { ...request, operation } as CanonicalProfileChangeRequest;
   assertNoSensitiveFields(normalized);
   if (normalized.operation === 'update') {
+    if (
+      normalized.clear_reasoning_effort === true &&
+      (normalized.profile?.dsh.reasoning_effort !== undefined ||
+        normalized.changes?.dsh?.reasoning_effort !== undefined)
+    ) {
+      throw new Error('Cannot set and clear reasoning effort in the same change');
+    }
     if (normalized.profile !== undefined) {
       const fullProfile = ProfileSchema.parse(normalized.profile);
       if (fullProfile.profile_id !== normalized.profile_id) {
@@ -565,7 +574,9 @@ function applyPureProfileChange(
     const current = after.profiles[index];
     if (current === undefined) throw new Error(`Unknown profile: ${normalized.profile_id}`);
     const merged = deepMerge(current, changes);
-    after.profiles[index] = ProfileSchema.parse(merged);
+    const updated = ProfileSchema.parse(merged);
+    if (normalized.clear_reasoning_effort === true) delete updated.dsh.reasoning_effort;
+    after.profiles[index] = updated;
     return { after: BridgeConfigSchema.parse(after), profileId: normalized.profile_id };
   }
 
@@ -798,8 +809,13 @@ function serializeProfileMutation(
       const changes = normalized.changes;
       if (changes === undefined) throw new Error('An update must provide profile or changes');
       for (const leaf of flattenObjectLeaves(changes)) {
+        if (leaf.path.length === 0 && isRecord(leaf.value) && Object.keys(leaf.value).length === 0)
+          continue;
         document.setIn(['profiles', index, ...leaf.path], leaf.value);
       }
+    }
+    if (normalized.clear_reasoning_effort === true) {
+      document.deleteIn(['profiles', index, 'dsh', 'reasoning_effort']);
     }
   } else if (normalized.operation === 'remove') {
     const index = before.profiles.findIndex(

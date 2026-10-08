@@ -3,6 +3,9 @@ import { z } from 'zod';
 /** The only protocol version implemented by this package. */
 export const PROTOCOL_VERSION = 'bridge.dsh.dev/v1alpha1' as const;
 
+export const BRIDGE_VERSION = '0.1.0-alpha.3' as const;
+export const SUPPORTED_DSH_VERSION = '0.2.0-rc.2' as const;
+
 /** A versioned wire value shared by every request, response and record. */
 export const ProtocolVersionSchema = z.literal(PROTOCOL_VERSION);
 export type ProtocolVersion = z.infer<typeof ProtocolVersionSchema>;

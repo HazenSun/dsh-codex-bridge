@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here. The project follows Semantic Versioning while public package publication remains in Alpha.
 
+## 0.1.0-alpha.3 - 2026-10-08
+
+### Added
+
+- `setup/install --dsh-bin` and a saved runtime launcher configuration for a dedicated DSH installation. Codex Desktop can start the selected runtime without inheriting terminal exports.
+- Explicit reasoning reset through `profiles update --clear-reasoning-effort` and MCP `update.clear_reasoning_effort`.
+- Plugin Setup entry registered through the onboarding Skill extension.
+- Explicit local MCP registration through the official Codex CLI, with saved Node/launcher/runtime paths. Legacy plugin JSON path templates and inherited custom Home variables are not relied upon.
+- Revision-protected `models sync --from-profile` to reuse supported DSH Provider settings and safe credential references inside `codex-bridge`, without writing project configuration or copying literal credentials.
+- Per-task cross-process execution leases, with conservative live-owner handling and generation-guarded dead-owner recovery. A second MCP may read a running task but cannot interrupt it through reconciliation, duplicate its continuation, or claim to cancel another process's execution.
+- Session metadata is flushed and its binding is saved before a user turn is submitted, so interruption after creation retains the continuation identity. Work interrupted before any session was created remains explicitly non-continuable.
+
+### Changed
+
+- Updated the DSH integration target from `0.1.0-rc.8` to the npm-published `0.2.0-rc.2`.
+- Reworked source-install and first-use documentation around exact DSH model discovery, project-scoped Profile changes, and conversational Codex setup.
+- Separated installation and MCP checks from credentialed model execution; retained rc.8 evidence is identified as historical.
+- Real E2E routes are configurable through Provider/Model/Reasoning environment variables, and logs default to outside the repository.
+- Migrated persistence and delegation evidence to DSH Session V4. Foreground child completion is distinguished from background queue acknowledgements; resumed tasks use the current model selection and report cache-aware token usage.
+- Updated the MCP SDK and test/release tooling, with constrained transitive security fixes. The source lockfile audit reported zero advisories on 2026-10-08.
+- Added publication-content checks to reject local configuration, private backup manifests, planning notes and new execution logs from release commits. Dependabot keeps contract-sensitive major upgrades out of automatic groups; CodeQL has the permissions needed for analysis uploads.
+
+### Verification and distribution
+
+- Real DeepSeek Flash and Pro (`high`) checks passed for concurrent routing, two completed foreground subagents, Session V4 continuation, cancellation, strict output/artifact verification and setup/rollback. See the [compatibility matrix](docs/compatibility.md) for exact scope.
+- Distribution remains source-only. Bridge npm packages and the public Codex Plugin Directory entry are not published.
+- Provider/model IDs and reasoning options must come from live DSH discovery. Previously recorded Kimi and DeepSeek routes are not guaranteed to exist in the new directory.
+
 ## 0.1.0-alpha.2 - 2026-08-21
 
 ### Added

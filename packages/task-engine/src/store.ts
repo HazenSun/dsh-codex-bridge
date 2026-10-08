@@ -1,4 +1,5 @@
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -14,6 +15,8 @@ import {
   type TaskResult,
 } from '@dsh-codex-bridge/protocol';
 import type { WorkspaceHandle } from '@dsh-codex-bridge/workspace';
+import { acquireFileTaskLease, TaskLeaseConflictError, type TaskLease } from './lease.js';
+export { TaskLeaseConflictError, type TaskLease } from './lease.js';
 
 export type StoredOperationKind = 'continue' | 'cancel';
 
@@ -40,6 +43,7 @@ export interface TaskStore {
   get(taskId: string): Promise<StoredTask | undefined>;
   list(): Promise<readonly StoredTask[]>;
   save(record: StoredTask): Promise<void>;
+  acquireLease(taskId: string): Promise<TaskLease>;
 }
 
 function parseStoredTask(value: unknown): StoredTask {
@@ -138,17 +142,34 @@ export class FileTaskStore implements TaskStore {
     const validated = parseStoredTask(record);
     const path = join(this.#root, validated.task.task_id, 'task.json');
     await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(validated, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
-    await rename(temporary, path);
+    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    let created = false;
+    try {
+      const file = await open(temporary, 'wx', 0o600);
+      created = true;
+      try {
+        await file.writeFile(`${JSON.stringify(validated, null, 2)}\n`, 'utf8');
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      await rename(temporary, path);
+    } finally {
+      if (created) await rm(temporary, { force: true });
+    }
+  }
+
+  async acquireLease(taskId: string): Promise<TaskLease> {
+    TaskIdSchema.parse(taskId);
+    const directory = join(this.#root, taskId);
+    await mkdir(directory, { recursive: true });
+    return acquireFileTaskLease(join(directory, 'task.lease.json'), taskId);
   }
 }
 
 export class MemoryTaskStore implements TaskStore {
   readonly #records = new Map<string, StoredTask>();
+  readonly #leases = new Map<string, string>();
 
   async get(taskId: string): Promise<StoredTask | undefined> {
     TaskIdSchema.parse(taskId);
@@ -161,5 +182,22 @@ export class MemoryTaskStore implements TaskStore {
 
   async save(record: StoredTask): Promise<void> {
     this.#records.set(record.task.task_id, structuredClone(record));
+  }
+
+  async acquireLease(taskId: string): Promise<TaskLease> {
+    TaskIdSchema.parse(taskId);
+    if (this.#leases.has(taskId)) throw new TaskLeaseConflictError(taskId);
+    const token = randomUUID();
+    this.#leases.set(taskId, token);
+    return {
+      ownerToken: token,
+      assertOwned: async () => {
+        if (this.#leases.get(taskId) !== token)
+          throw new TaskLeaseConflictError(taskId, 'lease ownership was lost');
+      },
+      release: async () => {
+        if (this.#leases.get(taskId) === token) this.#leases.delete(taskId);
+      },
+    };
   }
 }

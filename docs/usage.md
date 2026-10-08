@@ -14,7 +14,11 @@ Codex 会发现 Profile、判断单 Agent 或多 Agent、提交任务、等待�
 帮我完成 DSH Bridge 初次设置。所有配置先预览，确认后再写入。
 ```
 
-`setup-dsh-bridge` Skill 会检查状态、发现 DSH 已配置模型并引导建立 Profile；不会要求用户把 API Key 粘贴进对话。
+插件的 Setup 入口及这句提示词都会进入 `setup-dsh-bridge` Skill，检查状态、发现 `codex-bridge` DSH Profile 可见的模型并建立 Bridge Profile；不会要求用户把 API Key 粘贴进对话。
+
+Skill 插件和本地 MCP 分别安装。首次使用需运行[安装手册](installation.md)中的 `setup`，由安装器通过 `codex mcp add` 注册；只有 Marketplace Skill 插件时，Setup Skill 会引导补齐运行时和 MCP。
+
+本文对应 Bridge `0.1.0-alpha.3`，目标 DSH 版本为 `0.2.0-rc.2`。各平台和真实模型的验证范围见[兼容矩阵](compatibility.md)。
 
 ## 1. 角色分工
 
@@ -49,13 +53,13 @@ Bridge 不会自动提交、合并或部署 DSH 的修改。DSH 的文字输出�
 ### 指定 Profile
 
 ```text
-使用 DSH 的 kimi-code-builder 处理这个任务，返回 Patch 和验证证据。
+先列出这个项目的 DSH Profile，再用 default-code 处理这个任务，返回 Patch 和验证证据。
 ```
 
 ### 跨模型验证
 
 ```text
-使用 DeepSeek Profile 实现，再使用 Kimi Profile 对不可变 Patch 做独立审查。
+用已经配置的 builder Profile 实现，再用 reviewer Profile 对返回的 Patch 做独立审查。
 ```
 
 不同 Profile 的任务位于不同 Worktree。独立审查必须读取前一个任务的 Patch Artifact，不能假定另一个 Worktree 能看到未提交修改。
@@ -64,11 +68,19 @@ Bridge 不会自动提交、合并或部署 DSH 的修改。DSH 的文字输出�
 
 ```text
 显示 DSH 当前可用模型。
-把 kimi-k2.7-code 加成 fast-code Profile，先预览，不要写入。
-把 deepseek-v4-flash 设为当前项目默认模型，确认后再修改。
+把我从目录中选中的 Provider/Model 加成 fast-code Profile，先预览。
+把 fast-code 设为当前项目默认 Profile，确认刚才的 Diff 后写入。
+把 fast-code 切到我选中的新模型，清除旧推理档位，先预览。
+回滚上一次 Bridge 模型配置。
 ```
 
-模型必须先存在于 DSH。Codex 只能使用 `discover_dsh_models` 返回的精确 ID，并通过 `preview_profile_change` 展示修改。更新已有 Profile 时只提交最小 `changes`，不覆盖无关安全策略。`apply_profile_change` 必须携带预览时的 Revision；过期 Revision 会要求重新预览。
+模型必须先对 `codex-bridge` DSH Profile 可见。已有其他 DSH Profile 的配置可以按[安装手册](installation.md#复用已有-dsh-模型配置)通过 `models sync` 预览复用。Codex 只能使用 `discover_dsh_models` 返回的精确 ID，并通过 `preview_profile_change` 展示修改。更新已有 Bridge Profile 时只提交最小 `changes`，不覆盖无关安全策略。`apply_profile_change` 必须携带预览时的 Revision；过期 Revision 会要求重新预览。
+
+切换路由时，省略推理档位会保留旧值；需要模型默认值时明确要求清除。CLI 对应 `profiles update --clear-reasoning-effort`，MCP 对应 `operation: update` 中的 `clear_reasoning_effort: true`，同样先预览再应用。清除和设置新档位不能在同一次修改中同时使用。
+
+目录中能看到模型，表示 DSH 能发现该路由，不证明账号有调用权限或余额。配置、发现和 `doctor` 不发送模型生成请求；提交任务会使用 DSH Provider，并可能产生费用。Bridge Profile 的新增、更新、设默认和删除只改变当前 `bridge.yaml`；`models sync` 则修改 DSH `codex-bridge` Profile，由使用该 Home 的 Bridge 项目共用。
+
+切换 DSH 可执行文件或 Home 属于启动配置变更：CLI 可用环境变量临时选择，Desktop 需要重新运行 `setup` 保存选择，并新建任务。停用 Skill 插件不会删除已经注册的 MCP；只有全部 Bridge 项目停用后，再按[卸载边界](installation.md#11-卸载边界)移除注册。
 
 ## 3. 自动单/多 Agent 规则
 
@@ -141,7 +153,7 @@ Codex 至少检查：
 7. Warnings 没有隐藏未完成项；
 8. 主工作区没有被 Bridge 直接修改。
 
-当前 Alpha 会收集 Patch、Git Status 和 Agent Summary。结构化测试计数、精确 Diff additions/deletions 和自动验收解析仍在后续计划中；摘要中的“测试通过”必须由 Codex结合 Patch和命令证据审查。
+当前 Alpha 会收集 Patch、Git Status 和 Agent Summary。结构化测试计数、精确 Diff additions/deletions 和自动验收解析仍在后续计划中；摘要中的“测试通过”必须由 Codex 结合 Patch 和命令证据审查。
 
 ## 7. 继续同一任务
 
@@ -157,6 +169,8 @@ Bridge 使用 `continue_task`：
 - 生成新的 Run ID；
 - 保留前一次 Result History；
 - 复用同一个隔离 Worktree。
+
+如果修改了该任务同名 Profile 的模型路由，并已重启 MCP 加载配置，继续的新 Run 会使用当前路由；运行中的 Turn 和旧结果不会被改写。旧任务仍使用原 `profile_id`，不会因项目默认 Profile 变化自动换成另一个 Profile。Agent Preset 必须与 Session 历史匹配，续接时不能换 Preset。
 
 不要为了普通审查反馈创建没有上下文的新任务。
 
@@ -196,7 +210,7 @@ Bridge 默认只返回可审查 Patch，不自动修改主工作区。推荐流�
 ## 11. 当前限制
 
 - 源码安装，尚无公开 npm 包和公共 Plugin Directory 版本；
-- DSH 只验证 `0.1.0-rc.8`；
+- 当前目标是精确 DSH `0.2.0-rc.2`；历史 rc.8 证据不能替代本版验证，见[兼容矩阵](compatibility.md)；
 - 当前写入后端只支持 Git isolated Worktree；
 - DSH 任务不显示为 Codex 原生 Sub-Agent Thread，除非使用可选 Native Shell 外壳；
 - 不自动合并、提交、部署或发布；

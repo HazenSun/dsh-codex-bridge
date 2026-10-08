@@ -2,7 +2,7 @@
 
 Bridge 配置的原则是：**用户选择 Profile，DSH 持有 Provider 凭据，已接入的安全上限由代码执行**。配置文件只描述路由和策略，不应成为秘密仓库；Alpha 中存在尚未完全映射到执行器的声明字段。
 
-> 本页的 YAML 遵循 `0.1.0-alpha.2` 使用的 `v1alpha1` Schema。新增字段必须先进入 JSON Schema、`pnpm dsh-bridge profiles validate` 和兼容矩阵；未知字段、未知 Reasoning ID 和越过安全上限的覆盖必须失败，而不是静默降级。
+> 本页对应 Bridge `0.1.0-alpha.3` 与 `v1alpha1` Schema，目标 DSH 为 `0.2.0-rc.2`。新增字段必须先进入 JSON Schema 和配置校验。模型和推理档位来自 DSH 实时发现，不依赖文档中固定的模型列表。
 
 ## 1. 配置边界
 
@@ -41,11 +41,32 @@ hard safety ceiling
       > task request override
 ```
 
-同一级别出现重复键时必须报错。任务请求不能把 `isolated_worktree` 改成 `direct_write`；`0.1.0-alpha.2` 不提供 `direct_write`。
+同一级别出现重复键时必须报错。任务请求不能把 `isolated_worktree` 改成 `direct_write`；`0.1.0-alpha.3` 不提供 `direct_write`。
+
+### 运行时路径
+
+安装时通过 `--dsh-bin` 或 `DSH_BRIDGE_DSH_BIN` 指定 Bridge 使用的 DSH 可执行文件。例如：
+
+```bash
+export DSH_BRIDGE_DSH_BIN=/absolute/path/to/dsh-bridge-runtime/node_modules/.bin/dsh
+"$DSH_BRIDGE_DSH_BIN" --version
+pnpm dsh-bridge setup \
+  --project /absolute/path/to/project \
+  --source /absolute/path/to/dsh-codex-bridge \
+  --dsh-bin "$DSH_BRIDGE_DSH_BIN"
+```
+
+该路径应指向精确 `0.2.0-rc.2`。这让 Bridge 与已有 DSH 命令并存；直接运行 `dsh --version` 可能仍显示另一份安装。安装器把所选可执行路径、DSH Home 和源码路径保存到 `$CODEX_HOME/dsh-codex-bridge/runtime.json`，默认是 `~/.codex/dsh-codex-bridge/runtime.json`，不保存 Provider 密钥。
+
+Plugin 提供 Setup/Delegate Skill，安装器用官方 `codex mcp add` 单独注册 STDIO MCP，明确指定绝对 Node、源码启动脚本和 `DSH_BRIDGE_RUNTIME_CONFIG`。启动器读取保存的配置，不依赖插件 `.mcp.json` 的变量展开。保留源码和专用运行时目录；使用自定义 `CODEX_HOME` 时，在同一个 Home 中运行安装和 `codex mcp get dsh-codex-bridge --json` 检查。
+
+此启动配置由同一个 Codex Home 下的 Bridge 任务共用。CLI 中显式 `DSH_BRIDGE_DSH_BIN` / `DSH_HOME` 环境变量优先于保存值；要让 Desktop 使用新可执行文件或 Home，重新运行 `setup` 保存新值，再新建任务。不要只修改另一个终端的环境变量，或把 `env_vars` / `envVars` 加回旧插件 MCP JSON。单个项目的 Profile 修改仍只影响它自己的 `bridge.yaml`。
+
+`DSH_HOME` 是 DSH 自己的数据和配置目录，与可执行文件路径不同。DSH 0.2 首次读取旧 Home 时可能迁移 `settings.yaml` 为 Profile 设置；使用旧 Home 前备份相关设置，或先通过独立 Home 验证。Provider/Model 必须在 `codex-bridge` Profile 中可见，另一个 Profile 已配置账号不代表 Bridge 自动可用。独立 Home 的设置由安装器一同保存；临时测试应使用测试专用 Home 和启动配置。
 
 ## 3. 最小配置
 
-当前 `v1alpha1` 配置文件的 canonical 形态如下。它与仓库根目录的 [`bridge.example.yaml`](../bridge.example.yaml) 保持同一字段命名；字段使用 snake_case，未知字段会被拒绝。示例只引用 DSH 中已经存在的 Provider 和 Preset，不包含任何密钥：
+当前 `v1alpha1` 配置形态如下。它与仓库根目录的 [`bridge.example.yaml`](../bridge.example.yaml) 使用相同字段；字段使用 snake_case，未知字段会被拒绝。这是结构示例，先把 Provider/Model 替换为实际发现的精确 ID：
 
 ```yaml
 protocol_version: bridge.dsh.dev/v1alpha1
@@ -62,9 +83,8 @@ profiles:
     profile_id: typescript_worker
     description: 小范围 TypeScript 实现与测试
     dsh:
-      provider: openrouter-main
-      model: example-coding-model
-      reasoning_effort: medium
+      provider: returned-provider-id
+      model: returned-model-id
       agent_preset: standard
       max_tokens: 32000
     delegation:
@@ -88,16 +108,17 @@ profiles:
       disk_quota_bytes: 1073741824
 ```
 
-`openrouter-main`、`example-coding-model` 和 `standard` 是示例标识，不代表 Bridge 内置或 DSH 一定提供。使用前运行：
+`returned-provider-id` 和 `returned-model-id` 是占位值，不能直接用于任务。`standard` 是初始化使用的 Agent Preset，也需要在目标 DSH Profile 中可用。完成安装后先发现模型，再校验配置：
 
 ```bash
-pnpm dsh-bridge profiles list
-pnpm dsh-bridge profiles validate
+pnpm dsh-bridge models list --config /absolute/path/to/project/bridge.yaml --details
+pnpm dsh-bridge profiles list --config /absolute/path/to/project/bridge.yaml
+pnpm dsh-bridge profiles validate --config /absolute/path/to/project/bridge.yaml
 ```
 
 ## 4. 新模型入网与受控修改
 
-Bridge 不维护一份固定的模型白名单。新模型只要能被 DSH Provider Adapter 真实列出，就不需要修改 Bridge 代码。但要被 Codex 调度，它必须经过两层配置：
+Bridge 不维护固定的模型白名单。新模型经 DSH Provider Adapter 列出并符合当前契约时，可以通过配置接入，而无需逐个修改 Bridge 代码。要被 Codex 调度，它需要两层配置：
 
 ```text
 DSH Provider/Model（Adapter + 凭据）
@@ -107,18 +128,23 @@ Bridge Profile（用途 + 路由 + 预算 + 安全边界）
 Codex 委派
 ```
 
+DSH 0.2 的 Provider 配置按 Profile 保存。需要复用同一 Home 中 `web` 的配置时，使用 `models sync --from-profile web` 默认预览，审查后加 `--apply --expected-revision 'before_revision-from-sync-preview'`。同步只改变 `profiles/codex-bridge/cordis.patch.yml`，备份旧文件，不改变项目 `bridge.yaml`；支持静态 Provider 配置和安全环境变量引用，拒绝字面密钥和动态表达式。同步后的路由仍需经过发现并映射成 Bridge Profile。
+
 首次设置：
 
 ```bash
 pnpm dsh-bridge models list --config /path/to/project/bridge.yaml --details
+DSH_PROVIDER_ID='returned-provider-id'
+DSH_MODEL_ID='returned-model-id'
 pnpm dsh-bridge setup \
   --project /path/to/project \
   --source /path/to/dsh-codex-bridge \
-  --provider <discovered-provider-id> \
-  --model <discovered-model-id> \
-  --profile-id default-code \
-  --reasoning-effort <advertised-effort>
+  --provider "$DSH_PROVIDER_ID" \
+  --model "$DSH_MODEL_ID" \
+  --profile-id default-code
 ```
+
+只在所选模型返回支持的 `reasoning_efforts` 时才添加 `--reasoning-effort 'advertised-effort-id'`。省略时不为首次配置强加固定档位。DSH 目录中的模型可能随上游版本变化；历史 Flash/Kimi ID 和官方产品名称不能替代目录返回的路由 ID。
 
 已有配置的变更使用两阶段事务：
 
@@ -127,17 +153,43 @@ pnpm dsh-bridge setup \
 
 ```bash
 # 预览小范围模型切换
+# 先把两个模型变量换成新路由的精确值
 pnpm dsh-bridge profiles update fast-code \
   --config /path/to/project/bridge.yaml \
-  --provider <discovered-provider-id> \
-  --model <discovered-model-id> \
-  --reasoning-effort high
+  --provider "$DSH_PROVIDER_ID" \
+  --model "$DSH_MODEL_ID"
 
 # 审核后重复上一条命令，并加上
 # --apply --expected-revision <before_revision>
 ```
 
+更新路由时，未提交的推理字段会保留原值。新模型不使用原档位时，明确清除它：
+
+```bash
+pnpm dsh-bridge profiles update fast-code \
+  --config /path/to/project/bridge.yaml \
+  --clear-reasoning-effort
+# 可和新 --provider/--model 一起使用；审查后加 --apply 和预览 Revision。
+```
+
+`--clear-reasoning-effort` 与 `--reasoning-effort` 互斥。MCP 的等价 `ProfileChange` 如下；它只清除档位，保留路由和安全策略：
+
+```json
+{
+  "operation": "update",
+  "profile_id": "fast-code",
+  "changes": {},
+  "clear_reasoning_effort": true
+}
+```
+
+把该对象作为 `preview_profile_change` 的 `change` 预览；写入时向 `apply_profile_change` 传同一对象和预览的 `before_revision`。
+
 写入前会重新校验 Revision，使用同目录临时文件、`0600` 权限、`fsync` 和原子重命名。备份有界保留在 `.dsh-codex-bridge/config-backups/`；回滚也需要当前 Revision。过期 Revision、敏感字段、DSH 目录中不存在的路由或已明确不支持的 Reasoning Effort 都会失败，不做静默降级。
+
+`profiles add/update/set-default/remove` 默认只预览，`--apply` 才写入；`profiles rollback` 则直接执行受 Revision 保护的回滚。回滚需要最近一次写入结果的 `config_revision`，而不是写入前的 `before_revision`。这些操作只改变当前配置文件，不会为 DSH 新增凭据、修改全局模型默认值或更新其他项目。
+
+运行中的 Turn 与历史结果保留原状态。新 MCP 进程加载配置后，新任务使用新路由；`continue_task` 保持原 Task/Session/Worktree，但新 Run 会按该任务原 `profile_id` 的当前配置重新选择模型。变更项目默认 Profile 不会更改旧任务的 Profile ID。已有 Session 的 `dsh.agent_preset` 必须与其历史 Preset 匹配；续接时更换 Preset 会被拒绝，应为新 Preset 创建新任务。
 
 ## 5. Profile 设计
 
@@ -173,9 +225,8 @@ profiles:
     profile_id: multi_model_worker
     description: '主实现 + 快速检查 + 审查'
     dsh:
-      provider: openrouter-main
-      model: example-coding-model
-      reasoning_effort: high
+      provider: returned-provider-id
+      model: returned-model-id
       agent_preset: standard
       max_tokens: 48000
     delegation:
@@ -183,10 +234,10 @@ profiles:
       max_children: 3
       roles:
         fast:
-          provider: openrouter-main
+          provider: returned-provider-id
           model: example-fast-model
         reviewer:
-          provider: openrouter-main
+          provider: returned-provider-id
           model: example-review-model
 ```
 
@@ -238,7 +289,7 @@ workspace:
 
 ### `read_only`（任务级扩展目标）
 
-只读检查或分析任务。`0.1.0-alpha.2` 的 Workspace Schema 有效模式为 `isolated_worktree` 和 `patch_only`；`read_only` 不是有效配置值，不要把它写进 `bridge.yaml`。
+只读检查或分析任务。`0.1.0-alpha.3` 的 Workspace Schema 有效模式为 `isolated_worktree` 和 `patch_only`；`read_only` 不是有效配置值，不要把它写进 `bridge.yaml`。
 
 ### `patch_only`（后续兼容能力）
 
@@ -246,7 +297,7 @@ workspace:
 
 ### `direct_write`（MVP 禁用）
 
-直接写用户主工作区会扩大误操作和回滚风险。`0.1.0-alpha.2` 不提供该模式。
+直接写用户主工作区会扩大误操作和回滚风险。`0.1.0-alpha.3` 不提供该模式。
 
 ## 8. 并发、预算与递归
 
@@ -280,8 +331,8 @@ DSH 负责 Provider 的凭据和认证。Bridge 配置只保存引用：
 
 ```yaml
 dsh:
-  provider: openrouter-main
-  model: example-coding-model
+  provider: returned-provider-id
+  model: returned-model-id
 ```
 
 禁止这样写：
@@ -292,7 +343,7 @@ apiKey: sk-...
 endpoint: https://private.example.invalid
 ```
 
-Provider 缺失、认证失败或模型不存在时，`doctor` 和 `profiles validate` 应给出可操作的错误类别，并只显示 `configured` / `missing`，不打印值本身。
+`profiles validate` 检查配置结构和项目路径，不向 Provider 验证凭据。`doctor` 检查版本、Profile 合成和 MCP；`models list` 检查可发现的模型路由。账号认证、模型调用权限和实际生成要通过小任务验证，不能从前三项通过推断。
 
 ## 10. Artifact 与日志
 
@@ -301,7 +352,7 @@ Provider 缺失、认证失败或模型不存在时，`doctor` 和 `profiles val
 - 任务元数据、事件和产物分开保存；
 - 大 Patch 只通过 Artifact ID、SHA-256、字节数和分页接口读取；
 - JSONL 记录状态、工具、命令、退出码和耗时，不记录隐藏推理；
-- 任务保留期和磁盘配额可配置，清理前确认 Task 已经进入终态；
+- 清理前确认 Task 已经进入终态，并检查该任务的 Worktree 和产物范围；
 - 任何日志在写入和返回前都做 Token、Cookie、Authorization Header 脱敏。
 
 ## 11. 变更、升级与回滚
@@ -311,10 +362,10 @@ Provider 缺失、认证失败或模型不存在时，`doctor` 和 `profiles val
 1. 阅读 Release Notes 和 Compatibility Matrix；
 2. 在隔离环境运行 `pnpm dsh-bridge doctor --json --redacted` 与 Profile Contract Test；
 3. 确认 Codex Plugin、DSH Plugin 和共享协议版本相同；
-4. 使用一个只读任务和一个小范围 Worktree 任务验证；
+4. 使用一个小范围 Worktree 任务验证实际 Provider 调用和结果；
 5. 通过后再切换默认版本。
 
-由于 DSH `0.1.0-rc.8` 是 Developer Preview，生产或团队环境不要使用未锁定的 `latest`。Bridge 版本升级也不应自动升级 DSH；两者要有明确的兼容矩阵。
+当前 DSH 目标锁定为 `0.2.0-rc.2`。不要使用未锁定的 `latest` 替代；Bridge 和 DSH 的升级应分别查看兼容矩阵，并保留可恢复的旧运行时。
 
 ## 12. 配置检查命令
 
@@ -325,4 +376,4 @@ pnpm dsh-bridge profiles validate
 pnpm dsh-bridge doctor --json --redacted
 ```
 
-这些命令已经由 `0.1.0-alpha.2` CLI 提供；输出可复制到 Issue 而不暴露秘密。真实 DSH 闭环使用相同的 Profile/Provider，详见 [入门页的 E2E 证据](getting-started.md#8-真实-dsh-闭环验证)。
+这些命令由 `0.1.0-alpha.3` CLI 提供。共享输出前仍应检查项目路径和私有内容。真实模型测试的费用和证据范围见[入门页](getting-started.md#8-真实-dsh-闭环验证)及[兼容矩阵](compatibility.md)。
